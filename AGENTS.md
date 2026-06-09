@@ -25,7 +25,9 @@ pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-The VM update script runs `pip install -r requirements-dev.txt` and `pip install -e .` when `.venv` already exists; on first boot, create the venv manually or let the agent do it once.
+The VM update script creates `.venv` (if missing), installs dev dependencies, and installs the package in editable mode.
+
+**Gotcha:** Ubuntu Cloud Agent images may not include `python3.12-venv` by default. If `python3 -m venv .venv` fails, run once: `sudo apt-get install -y python3.12-venv`.
 
 ### Lint / test / run
 
