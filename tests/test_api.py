@@ -34,6 +34,20 @@ def test_chat_mock_reply() -> None:
     assert "Hello, Ai!" in payload["reply"]
 
 
+def test_chat_stream_mock_reply() -> None:
+    with client.stream(
+        "POST",
+        "/api/chat/stream",
+        json={"message": "Stream please"},
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = "".join(response.iter_text())
+
+    assert '"done": true' in body or '"done":true' in body
+    assert "Stream" in body and "please" in body
+
+
 def test_chat_multi_turn_history() -> None:
     first = client.post("/api/chat", json={"message": "My name is Alex"})
     assert first.status_code == 200

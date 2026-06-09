@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterator
 
 from ai_app.models import ChatMessage
 
@@ -65,3 +66,36 @@ def generate_reply(message: str, history: list[ChatMessage] | None = None) -> tu
             pass
 
     return _mock_reply(message, history), "mock"
+
+
+def stream_reply_events(
+    message: str,
+    history: list[ChatMessage] | None = None,
+) -> Iterator[dict[str, str | bool]]:
+    """Yield SSE payload dicts with token chunks and a final done event."""
+    history = history or []
+    messages = _build_messages(history, message)
+    mode, _ = get_runtime_mode()
+
+    if mode == "openai":
+        try:
+            from openai import OpenAI  # type: ignore[import-not-found]
+
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            stream = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=messages,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield {"token": delta}
+            yield {"done": True, "model": OPENAI_MODEL}
+            return
+        except Exception:
+            pass
+
+    for token in _mock_reply(message, history).split(" "):
+        yield {"token": f"{token} "}
+    yield {"done": True, "model": "mock"}
