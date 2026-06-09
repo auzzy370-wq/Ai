@@ -23,6 +23,7 @@ Open http://localhost:8000 for the chat UI or http://localhost:8000/docs for the
 | `/health` | GET | Health check |
 | `/api/status` | GET | Runtime mode (`mock` or `openai`) and model name |
 | `/api/chat` | POST | Send a message and optional conversation history |
+| `/api/chat/stream` | POST | Stream a reply as Server-Sent Events (used by the web UI) |
 
 Example:
 
