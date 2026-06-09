@@ -32,6 +32,15 @@ The VM update script creates `.venv` (if missing), installs dev dependencies, an
 ### Lint / test / run
 
 ```bash
+make install   # first time only
+make lint
+make test
+make dev       # API with reload on port 8000
+```
+
+Equivalent manual commands:
+
+```bash
 source .venv/bin/activate
 ruff check .
 pytest

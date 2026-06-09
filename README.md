@@ -40,10 +40,20 @@ export OPENAI_API_KEY=sk-...
 
 ## Development
 
-```bash
-# Lint
-ruff check .
+Using Make (after `make install`):
 
-# Tests
+```bash
+make lint
+make test
+make dev    # API with auto-reload on port 8000
+```
+
+Or run commands directly:
+
+```bash
+source .venv/bin/activate
+ruff check .
 pytest
 ```
+
+CI runs lint and tests on every push and pull request to `main` (see `.github/workflows/ci.yml`).
