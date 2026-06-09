@@ -21,3 +21,5 @@ class ChatResponse(BaseModel):
 class StatusResponse(BaseModel):
     mode: Literal["mock", "openai"]
     model: str
+    mock_forced: bool = False
+    reason: str = "no_api_key"

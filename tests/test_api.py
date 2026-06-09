@@ -24,6 +24,8 @@ def test_status_mock_mode() -> None:
     payload = response.json()
     assert payload["mode"] == "mock"
     assert payload["model"] == "mock"
+    assert payload["mock_forced"] is False
+    assert payload["reason"] == "no_api_key"
 
 
 def test_chat_mock_reply() -> None:
@@ -66,4 +68,16 @@ def test_chat_multi_turn_history() -> None:
     assert second.status_code == 200
     payload = second.json()
     assert payload["model"] == "mock"
-    assert "turn 2" in payload["reply"].lower()
+    assert "alex" in payload["reply"].lower()
+
+
+def test_mock_recall_without_name() -> None:
+    response = client.post("/api/chat", json={"message": "What's my name?"})
+    assert response.status_code == 200
+    assert "do not have your name" in response.json()["reply"].lower()
+
+
+def test_mock_help_command() -> None:
+    response = client.post("/api/chat", json={"message": "help"})
+    assert response.status_code == 200
+    assert "mock mode" in response.json()["reply"].lower()

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from ai_app.config import get_cors_origins
 from ai_app.models import ChatRequest, ChatResponse, StatusResponse
-from ai_app.responder import generate_reply, get_runtime_mode, stream_reply_events
+from ai_app.responder import generate_reply, get_status_details, stream_reply_events
 
 load_dotenv()
 
@@ -39,8 +39,8 @@ def health() -> dict[str, str]:
 
 @app.get("/api/status", response_model=StatusResponse)
 def status() -> StatusResponse:
-    mode, model = get_runtime_mode()
-    return StatusResponse(mode=mode, model=model)
+    mode, model, mock_forced, reason = get_status_details()
+    return StatusResponse(mode=mode, model=model, mock_forced=mock_forced, reason=reason)
 
 
 @app.post("/api/chat", response_model=ChatResponse)

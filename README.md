@@ -38,7 +38,19 @@ curl -s -X POST http://localhost:8000/api/chat \
   -d '{"message":"Follow up","history":[{"role":"user","content":"Hi"},{"role":"assistant","content":"Hello!"}]}'
 ```
 
-Copy `.env.example` to `.env` for local configuration. By default the app uses a built-in mock responder so it runs without API keys. To use OpenAI, set `OPENAI_API_KEY` and install the optional client:
+Copy `.env.example` to `.env` for local configuration.
+
+### Mock mode (default)
+
+No API key is required. Mock mode echoes your messages, tracks multi-turn history, and can recall simple facts (e.g. ask "what's my name?" after saying "My name is Alex").
+
+Force mock mode even when an API key is present:
+
+```bash
+MOCK_MODE=true make dev
+```
+
+To use OpenAI instead, set `OPENAI_API_KEY` and install the optional client:
 
 ```bash
 pip install -e ".[openai]"

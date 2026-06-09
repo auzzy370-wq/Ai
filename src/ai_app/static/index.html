@@ -260,8 +260,10 @@
         try {
           const response = await fetch("/api/status");
           const data = await response.json();
-          statusPill.textContent = `${data.mode} · ${data.model}`;
+          const forced = data.mock_forced ? " (forced)" : "";
+          statusPill.textContent = `${data.mode}${forced} · ${data.model}`;
           statusPill.className = `status-pill ${data.mode}`;
+          statusPill.title = data.reason || "";
         } catch {
           statusPill.textContent = "offline";
           statusPill.className = "status-pill mock";

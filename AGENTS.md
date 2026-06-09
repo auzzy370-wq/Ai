@@ -51,6 +51,7 @@ uvicorn ai_app.main:app --host 0.0.0.0 --port 8000
 
 | Variable | Purpose |
 |----------|---------|
+| `MOCK_MODE` | Force mock mode (`true`/`1`/`yes`) even if `OPENAI_API_KEY` is set |
 | `OPENAI_API_KEY` | Enable OpenAI mode |
 | `OPENAI_MODEL` | Model name (default `gpt-4o-mini`) |
 | `SYSTEM_PROMPT` | Optional system message for OpenAI |
