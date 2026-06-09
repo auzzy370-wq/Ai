@@ -47,10 +47,26 @@ pytest
 uvicorn ai_app.main:app --host 0.0.0.0 --port 8000
 ```
 
+### Configuration (`.env`)
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | Enable OpenAI mode |
+| `OPENAI_MODEL` | Model name (default `gpt-4o-mini`) |
+| `SYSTEM_PROMPT` | Optional system message for OpenAI |
+| `CORS_ORIGINS` | Comma-separated origins, or `*` |
+
+### CLI
+
+```bash
+ai-chat "Hello"
+ai-chat --stream "Streaming reply"
+```
+
 ### Notes
 
 - Mock mode is the default; no secrets are required for basic chat demos.
-- OpenAI integration is optional (`pip install openai` + `OPENAI_API_KEY`).
+- OpenAI integration is optional (`pip install -e ".[openai]"` + `OPENAI_API_KEY`).
 - Chat UI: http://localhost:8000
 - API docs: http://localhost:8000/docs
 - Docker: `make docker-up` (requires Docker)
