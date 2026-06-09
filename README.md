@@ -45,6 +45,16 @@ pip install -e ".[openai]"
 export OPENAI_API_KEY=sk-...
 ```
 
+## CLI
+
+After `pip install -e .`, use the `ai-chat` command:
+
+```bash
+ai-chat "Hello from the terminal"
+ai-chat --stream "Type this out token by token"
+ai-chat --url http://localhost:8000 "Custom base URL"
+```
+
 ## Docker
 
 ```bash

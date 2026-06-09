@@ -20,6 +20,9 @@ openai = [
     "openai>=1.0.0",
 ]
 
+[project.scripts]
+ai-chat = "ai_app.cli:main"
+
 [build-system]
 requires = ["setuptools>=75.0.0"]
 build-backend = "setuptools.build_meta"

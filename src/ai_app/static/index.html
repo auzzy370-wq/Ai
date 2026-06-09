@@ -86,6 +86,7 @@
       .toolbar {
         display: flex;
         justify-content: flex-end;
+        gap: 8px;
         padding: 10px 20px 0;
       }
 
@@ -189,6 +190,7 @@
         <span id="status-pill" class="status-pill mock">loading...</span>
       </header>
       <div class="toolbar">
+        <button type="button" id="export-button">Export JSON</button>
         <button type="button" id="clear-button">Clear chat</button>
       </div>
       <div id="messages" aria-live="polite"></div>
@@ -210,6 +212,7 @@
       const input = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
       const clearButton = document.getElementById("clear-button");
+      const exportButton = document.getElementById("export-button");
       const statusPill = document.getElementById("status-pill");
 
       let history = [];
@@ -264,6 +267,18 @@
           statusPill.className = "status-pill mock";
         }
       }
+
+      exportButton.addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify(history, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `ai-chat-${new Date().toISOString().slice(0, 19)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
 
       clearButton.addEventListener("click", () => {
         history = [];
