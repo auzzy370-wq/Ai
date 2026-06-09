@@ -5,6 +5,13 @@ from ai_app.main import app
 client = TestClient(app)
 
 
+def test_index_ui() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Ai Chat" in response.text
+
+
 def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200

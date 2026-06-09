@@ -14,7 +14,7 @@ pip install -e .
 uvicorn ai_app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open http://localhost:8000/docs for the interactive API explorer.
+Open http://localhost:8000 for the chat UI or http://localhost:8000/docs for the API explorer.
 
 ## API
 
@@ -34,9 +34,19 @@ curl -s -X POST http://localhost:8000/api/chat \
 By default the app uses a built-in mock responder so it runs without API keys. To use OpenAI, set `OPENAI_API_KEY` and install the optional client:
 
 ```bash
-pip install openai
+pip install -e ".[openai]"
 export OPENAI_API_KEY=sk-...
 ```
+
+## Docker
+
+```bash
+docker compose up --build
+# or
+make docker-up
+```
+
+The API and chat UI are available at http://localhost:8000.
 
 ## Development
 

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ai Chat</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f1115;
+        --panel: #171a21;
+        --border: #2a2f3a;
+        --text: #e8ecf1;
+        --muted: #9aa4b2;
+        --accent: #5b8cff;
+        --user: #1f2937;
+        --assistant: #111827;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, system-ui, sans-serif;
+        background: radial-gradient(circle at top, #1a2233, var(--bg) 45%);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .app {
+        width: min(720px, 100%);
+        height: min(80vh, 760px);
+        background: color-mix(in srgb, var(--panel) 92%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.25rem;
+      }
+
+      header p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      #messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .message {
+        max-width: 85%;
+        padding: 12px 14px;
+        border-radius: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: var(--user);
+        border: 1px solid var(--border);
+      }
+
+      .message.assistant {
+        align-self: flex-start;
+        background: var(--assistant);
+        border: 1px solid var(--border);
+      }
+
+      .message .meta {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      form {
+        display: flex;
+        gap: 12px;
+        padding: 16px 20px 20px;
+        border-top: 1px solid var(--border);
+      }
+
+      input,
+      button {
+        font: inherit;
+      }
+
+      input {
+        flex: 1;
+        border: 1px solid var(--border);
+        background: #0b0d12;
+        color: var(--text);
+        border-radius: 12px;
+        padding: 12px 14px;
+      }
+
+      input:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+        border-color: var(--accent);
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: white;
+        border-radius: 12px;
+        padding: 0 18px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>Ai Chat</h1>
+        <p>Talk to the API. Mock mode works without API keys.</p>
+      </header>
+      <div id="messages" aria-live="polite"></div>
+      <form id="chat-form">
+        <input
+          id="message-input"
+          type="text"
+          placeholder="Type a message..."
+          autocomplete="off"
+          required
+        />
+        <button type="submit" id="send-button">Send</button>
+      </form>
+    </main>
+    <script>
+      const messages = document.getElementById("messages");
+      const form = document.getElementById("chat-form");
+      const input = document.getElementById("message-input");
+      const sendButton = document.getElementById("send-button");
+
+      function addMessage(role, text, meta = "") {
+        const el = document.createElement("div");
+        el.className = `message ${role}`;
+        el.textContent = text;
+        if (meta) {
+          const metaEl = document.createElement("span");
+          metaEl.className = "meta";
+          metaEl.textContent = meta;
+          el.appendChild(metaEl);
+        }
+        messages.appendChild(el);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      addMessage("assistant", "Hi! Send a message to try the chat API.");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = input.value.trim();
+        if (!message) return;
+
+        addMessage("user", message);
+        input.value = "";
+        sendButton.disabled = true;
+
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+          }
+
+          const data = await response.json();
+          addMessage("assistant", data.reply, `model: ${data.model}`);
+        } catch (error) {
+          addMessage("assistant", `Error: ${error.message}`);
+        } finally {
+          sendButton.disabled = false;
+          input.focus();
+        }
+      });
+    </script>
+  </body>
+</html>
