@@ -1,7 +1,7 @@
 import os
 from collections.abc import Iterator
 
-from ai_app.config import get_openai_model, get_system_prompt
+from ai_app.config import get_openai_model, get_system_prompt, is_mock_mode_forced
 from ai_app.models import ChatMessage
 
 
@@ -16,36 +16,72 @@ def _build_messages(history: list[ChatMessage], message: str) -> list[dict[str, 
     return messages
 
 
-def _mock_reply(message: str, history: list[ChatMessage]) -> str:
-    turn = len(history) // 2 + 1
-    if history:
-        last_assistant = next(
-            (item.content for item in reversed(history) if item.role == "assistant"),
-            None,
-        )
-        if last_assistant:
-            return (
-                f"Mock AI (turn {turn}): You said '{message}'. "
-                f"I'm still in mock mode — my last reply started with "
-                f"\"{last_assistant[:40]}{'...' if len(last_assistant) > 40 else ''}\". "
-                "Set OPENAI_API_KEY for live multi-turn chat."
-            )
+def _extract_name_from_messages(messages: list[str]) -> str | None:
+    for text in reversed(messages):
+        lower = text.lower()
+        if "my name is" in lower:
+            name = lower.split("my name is", 1)[1].strip().strip(".'\"")
+            return name or None
+    return None
 
-    return f"Mock AI: You said '{message}'. Set OPENAI_API_KEY for live responses."
+
+def _mock_reply(message: str, history: list[ChatMessage]) -> str:
+    user_messages = [item.content for item in history if item.role == "user"]
+    all_user_messages = user_messages + [message]
+    lower = message.lower().strip()
+    turn = len(history) // 2 + 1
+
+    if lower in {"help", "?"}:
+        return (
+            "Mock AI: Local mock mode is active. "
+            "Try multi-turn chat, ask \"what's my name\" after introducing yourself, "
+            "or set OPENAI_API_KEY for live AI."
+        )
+
+    recall_phrases = ("what did i", "what's my name", "what is my name", "who am i")
+    if any(phrase in lower for phrase in recall_phrases):
+        name = _extract_name_from_messages(all_user_messages)
+        if name:
+            return f"Mock AI: You said your name is {name.title()}."
+        return 'Mock AI: I do not have your name yet. Try saying "My name is ...".'
+
+    system_prompt = get_system_prompt()
+    if system_prompt:
+        preview = system_prompt if len(system_prompt) <= 80 else f"{system_prompt[:80]}..."
+        return (
+            f"Mock AI (turn {turn}): You said '{message}'. "
+            f'[System prompt: "{preview}"]'
+        )
+
+    if history:
+        return (
+            f"Mock AI (turn {turn}): You said '{message}'. "
+            "Conversation history is tracked in mock mode."
+        )
+
+    return f"Mock AI: You said '{message}'. Running in mock mode (no API key needed)."
 
 
 def get_runtime_mode() -> tuple[str, str]:
+    mode, model, _, _ = get_status_details()
+    return mode, model
+
+
+def get_status_details() -> tuple[str, str, bool, str]:
+    if is_mock_mode_forced():
+        return "mock", "mock", True, "forced"
+
     api_key = os.getenv("OPENAI_API_KEY")
     model = get_openai_model()
     if not api_key:
-        return "mock", "mock"
+        return "mock", "mock", False, "no_api_key"
 
     try:
         import openai  # noqa: F401
     except ImportError:
-        return "mock", "mock (openai package missing)"
+        return "mock", "mock", False, "missing_openai_package"
 
-    return "openai", model
+    return "openai", model, False, "openai_ready"
 
 
 def _openai_reply(messages: list[dict[str, str]], *, stream: bool = False):

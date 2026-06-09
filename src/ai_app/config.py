@@ -13,6 +13,14 @@ def get_system_prompt() -> str | None:
     return value or None
 
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+@lru_cache
+def is_mock_mode_forced() -> bool:
+    return os.getenv("MOCK_MODE", "").strip().lower() in _TRUTHY
+
+
 @lru_cache
 def get_cors_origins() -> tuple[str, ...]:
     raw = os.getenv("CORS_ORIGINS", "").strip()
@@ -26,4 +34,5 @@ def get_cors_origins() -> tuple[str, ...]:
 def reset_config_cache() -> None:
     get_openai_model.cache_clear()
     get_system_prompt.cache_clear()
+    is_mock_mode_forced.cache_clear()
     get_cors_origins.cache_clear()
