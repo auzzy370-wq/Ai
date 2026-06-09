@@ -1,0 +1,244 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --neural-cyan: #00ffff;
+  --neural-blue: #4fc3f7;
+  --neural-purple: #ab47bc;
+  --neural-green: #66bb6a;
+  --neural-orange: #ffa726;
+  --neural-red: #ef5350;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background: #050810;
+  color: #e8f4f8;
+}
+
+/* Neural grid background */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scan line effect */
+body::after {
+  content: '';
+  position: fixed;
+  top: -100%;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(0, 255, 255, 0.02),
+    transparent
+  );
+  animation: scan-line 8s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 255, 0.6);
+}
+
+/* Neural UI Components */
+@layer components {
+  .neural-panel {
+    @apply bg-black/40 backdrop-blur-xl border border-[rgba(0,255,255,0.15)] rounded-xl;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.05), inset 0 0 20px rgba(0, 255, 255, 0.02);
+  }
+
+  .neural-panel-glow {
+    @apply neural-panel;
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.15), inset 0 0 30px rgba(0, 255, 255, 0.05);
+  }
+
+  .neural-button {
+    @apply px-4 py-2 rounded-lg border border-[rgba(0,255,255,0.3)] bg-[rgba(0,255,255,0.05)]
+           text-[#00ffff] font-mono text-sm transition-all duration-200
+           hover:bg-[rgba(0,255,255,0.15)] hover:border-[rgba(0,255,255,0.6)]
+           hover:shadow-[0_0_15px_rgba(0,255,255,0.3)]
+           active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .neural-button-primary {
+    @apply px-4 py-2 rounded-lg bg-[rgba(0,255,255,0.2)] border border-[rgba(0,255,255,0.5)]
+           text-[#00ffff] font-mono text-sm font-semibold transition-all duration-200
+           hover:bg-[rgba(0,255,255,0.3)] hover:shadow-[0_0_25px_rgba(0,255,255,0.4)]
+           active:scale-95;
+  }
+
+  .neural-input {
+    @apply w-full px-4 py-3 bg-black/40 border border-[rgba(0,255,255,0.2)] rounded-lg
+           text-white placeholder:text-[rgba(255,255,255,0.3)] font-mono text-sm
+           focus:outline-none focus:border-[rgba(0,255,255,0.6)] 
+           focus:shadow-[0_0_15px_rgba(0,255,255,0.2)]
+           transition-all duration-200;
+  }
+
+  .agent-card {
+    @apply neural-panel p-4 cursor-pointer transition-all duration-300
+           hover:border-[rgba(79,195,247,0.4)] hover:bg-black/60;
+  }
+
+  .agent-card-active {
+    @apply agent-card;
+    box-shadow: 0 0 30px rgba(79, 195, 247, 0.3);
+    border-color: rgba(79, 195, 247, 0.5);
+  }
+
+  .neural-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono
+           border bg-black/40 backdrop-blur-sm;
+  }
+
+  .badge-active {
+    @apply neural-badge border-green-500/40 text-green-400 bg-green-500/10;
+  }
+
+  .badge-idle {
+    @apply neural-badge border-gray-500/40 text-gray-400 bg-gray-500/10;
+  }
+
+  .badge-thinking {
+    @apply neural-badge border-blue-400/40 text-blue-300 bg-blue-500/10;
+  }
+
+  .badge-error {
+    @apply neural-badge border-red-500/40 text-red-400 bg-red-500/10;
+  }
+
+  .metric-card {
+    @apply neural-panel p-4 flex flex-col gap-1;
+  }
+
+  .metric-value {
+    @apply text-2xl font-bold font-mono text-[#00ffff];
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+  }
+
+  .metric-label {
+    @apply text-xs text-gray-400 font-mono uppercase tracking-wider;
+  }
+
+  .neural-text {
+    @apply font-mono text-[#00ffff];
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+  }
+
+  .glow-text {
+    text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+  }
+
+  .section-header {
+    @apply text-xs font-mono text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2;
+  }
+
+  .section-header::before {
+    content: '//';
+    color: rgba(0, 255, 255, 0.5);
+  }
+}
+
+/* Neural animations */
+@keyframes neural-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes synaptic-fire {
+  0% { opacity: 0; transform: scale(0.5); }
+  50% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes brain-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.3); }
+  50% { box-shadow: 0 0 60px rgba(0, 255, 255, 0.8); }
+}
+
+@keyframes data-stream {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes scan-line {
+  0% { top: -100%; }
+  100% { top: 110%; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Three.js canvas styling */
+canvas {
+  display: block;
+}
+
+/* Code blocks */
+pre {
+  @apply font-mono text-sm bg-black/60 rounded-lg p-4 overflow-auto;
+  border: 1px solid rgba(0, 255, 255, 0.15);
+}
+
+code {
+  @apply font-mono text-[#00ffff] text-sm;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 255, 255, 0.2);
+  color: #00ffff;
+}
