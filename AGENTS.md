@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## Project overview
 
-**Ai** is a minimal FastAPI service with a built-in web chat UI (`/`), a health check (`/health`), and a chat API (`/api/chat`). Without `OPENAI_API_KEY`, `/api/chat` returns deterministic mock replies so the app is runnable in any environment.
+**Ai** is a minimal FastAPI service with a built-in web chat UI (`/`), health check (`/health`), status endpoint (`/api/status`), and multi-turn chat API (`/api/chat`). The UI persists conversation history in `localStorage` and sends prior turns to the API. Without `OPENAI_API_KEY`, `/api/chat` returns mock replies so the app is runnable in any environment. `.env` is loaded automatically via `python-dotenv`.
 
 ## Cursor Cloud specific instructions
 

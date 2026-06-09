@@ -1,33 +1,67 @@
 import os
 
+from ai_app.models import ChatMessage
 
-def generate_reply(message: str) -> tuple[str, str]:
-    """Return a chat reply and model name.
+OPENAI_MODEL = "gpt-4o-mini"
 
-    Uses OpenAI when OPENAI_API_KEY is set; otherwise returns a deterministic mock reply
-    so the app runs without external credentials.
-    """
+
+def _build_messages(history: list[ChatMessage], message: str) -> list[dict[str, str]]:
+    messages = [{"role": item.role, "content": item.content} for item in history]
+    messages.append({"role": "user", "content": message})
+    return messages
+
+
+def _mock_reply(message: str, history: list[ChatMessage]) -> str:
+    turn = len(history) // 2 + 1
+    if history:
+        last_assistant = next(
+            (item.content for item in reversed(history) if item.role == "assistant"),
+            None,
+        )
+        if last_assistant:
+            return (
+                f"Mock AI (turn {turn}): You said '{message}'. "
+                f"I'm still in mock mode — my last reply started with "
+                f"\"{last_assistant[:40]}{'...' if len(last_assistant) > 40 else ''}\". "
+                "Set OPENAI_API_KEY for live multi-turn chat."
+            )
+
+    return (
+        f"Mock AI: You said '{message}'. Set OPENAI_API_KEY for live responses."
+    )
+
+
+def get_runtime_mode() -> tuple[str, str]:
     api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
+    if not api_key:
+        return "mock", "mock"
+
+    try:
+        import openai  # noqa: F401
+    except ImportError:
+        return "mock", "mock (openai package missing)"
+
+    return "openai", OPENAI_MODEL
+
+
+def generate_reply(message: str, history: list[ChatMessage] | None = None) -> tuple[str, str]:
+    """Return a chat reply and model name."""
+    history = history or []
+    messages = _build_messages(history, message)
+    mode, model_name = get_runtime_mode()
+
+    if mode == "openai":
         try:
             from openai import OpenAI  # type: ignore[import-not-found]
-        except ImportError:
-            return (
-                "OPENAI_API_KEY is set but the openai package is not installed. "
-                "Install with: pip install openai",
-                "mock",
-            )
 
-        try:
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             completion = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": message}],
+                model=OPENAI_MODEL,
+                messages=messages,
             )
             reply = completion.choices[0].message.content or ""
-            return reply.strip(), "gpt-4o-mini"
+            return reply.strip(), OPENAI_MODEL
         except Exception:
-            # Fall back to mock mode if the provider call fails.
             pass
 
-    return f"Mock AI: You said '{message}'. Set OPENAI_API_KEY for live responses.", "mock"
+    return _mock_reply(message, history), "mock"

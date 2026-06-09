@@ -15,6 +15,8 @@
         --accent: #5b8cff;
         --user: #1f2937;
         --assistant: #111827;
+        --mock: #f59e0b;
+        --live: #22c55e;
       }
 
       * {
@@ -47,6 +49,10 @@
       header {
         padding: 20px 24px;
         border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
       }
 
       header h1 {
@@ -60,10 +66,44 @@
         font-size: 0.9rem;
       }
 
+      .status-pill {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        white-space: nowrap;
+      }
+
+      .status-pill.mock {
+        color: var(--mock);
+      }
+
+      .status-pill.openai {
+        color: var(--live);
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        padding: 10px 20px 0;
+      }
+
+      .toolbar button {
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        border-radius: 10px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.85rem;
+      }
+
       #messages {
         flex: 1;
         overflow-y: auto;
-        padding: 20px 24px;
+        padding: 12px 24px 20px;
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -123,7 +163,7 @@
         border-color: var(--accent);
       }
 
-      button {
+      button[type="submit"] {
         border: none;
         background: var(--accent);
         color: white;
@@ -142,9 +182,15 @@
   <body>
     <main class="app">
       <header>
-        <h1>Ai Chat</h1>
-        <p>Talk to the API. Mock mode works without API keys.</p>
+        <div>
+          <h1>Ai Chat</h1>
+          <p>Multi-turn chat with conversation history.</p>
+        </div>
+        <span id="status-pill" class="status-pill mock">loading...</span>
       </header>
+      <div class="toolbar">
+        <button type="button" id="clear-button">Clear chat</button>
+      </div>
       <div id="messages" aria-live="polite"></div>
       <form id="chat-form">
         <input
@@ -158,10 +204,40 @@
       </form>
     </main>
     <script>
-      const messages = document.getElementById("messages");
+      const STORAGE_KEY = "ai-chat-history";
+      const messagesEl = document.getElementById("messages");
       const form = document.getElementById("chat-form");
       const input = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
+      const clearButton = document.getElementById("clear-button");
+      const statusPill = document.getElementById("status-pill");
+
+      let history = [];
+
+      function saveHistory() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+      }
+
+      function loadHistory() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          return saved ? JSON.parse(saved) : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function renderHistory() {
+        messagesEl.innerHTML = "";
+        if (history.length === 0) {
+          addMessage("assistant", "Hi! Send a message to try multi-turn chat.");
+          return;
+        }
+
+        for (const item of history) {
+          addMessage(item.role, item.content, item.meta || "");
+        }
+      }
 
       function addMessage(role, text, meta = "") {
         const el = document.createElement("div");
@@ -173,18 +249,38 @@
           metaEl.textContent = meta;
           el.appendChild(metaEl);
         }
-        messages.appendChild(el);
-        messages.scrollTop = messages.scrollHeight;
+        messagesEl.appendChild(el);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
-      addMessage("assistant", "Hi! Send a message to try the chat API.");
+      async function loadStatus() {
+        try {
+          const response = await fetch("/api/status");
+          const data = await response.json();
+          statusPill.textContent = `${data.mode} · ${data.model}`;
+          statusPill.className = `status-pill ${data.mode}`;
+        } catch {
+          statusPill.textContent = "offline";
+          statusPill.className = "status-pill mock";
+        }
+      }
+
+      clearButton.addEventListener("click", () => {
+        history = [];
+        saveHistory();
+        renderHistory();
+        input.focus();
+      });
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const message = input.value.trim();
         if (!message) return;
 
-        addMessage("user", message);
+        const requestHistory = history.map(({ role, content }) => ({ role, content }));
+        history.push({ role: "user", content: message });
+        saveHistory();
+        renderHistory();
         input.value = "";
         sendButton.disabled = true;
 
@@ -192,7 +288,7 @@
           const response = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({ message, history: requestHistory }),
           });
 
           if (!response.ok) {
@@ -200,14 +296,26 @@
           }
 
           const data = await response.json();
-          addMessage("assistant", data.reply, `model: ${data.model}`);
+          history.push({
+            role: "assistant",
+            content: data.reply,
+            meta: `model: ${data.model}`,
+          });
+          saveHistory();
+          renderHistory();
         } catch (error) {
-          addMessage("assistant", `Error: ${error.message}`);
+          history.push({ role: "assistant", content: `Error: ${error.message}` });
+          saveHistory();
+          renderHistory();
         } finally {
           sendButton.disabled = false;
           input.focus();
         }
       });
+
+      history = loadHistory();
+      renderHistory();
+      loadStatus();
     </script>
   </body>
 </html>

@@ -21,7 +21,8 @@ Open http://localhost:8000 for the chat UI or http://localhost:8000/docs for the
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
-| `/api/chat` | POST | Send a message and receive a reply |
+| `/api/status` | GET | Runtime mode (`mock` or `openai`) and model name |
+| `/api/chat` | POST | Send a message and optional conversation history |
 
 Example:
 
@@ -29,9 +30,14 @@ Example:
 curl -s -X POST http://localhost:8000/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"Hello, Ai!"}'
+
+# Multi-turn example
+curl -s -X POST http://localhost:8000/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Follow up","history":[{"role":"user","content":"Hi"},{"role":"assistant","content":"Hello!"}]}'
 ```
 
-By default the app uses a built-in mock responder so it runs without API keys. To use OpenAI, set `OPENAI_API_KEY` and install the optional client:
+Copy `.env.example` to `.env` for local configuration. By default the app uses a built-in mock responder so it runs without API keys. To use OpenAI, set `OPENAI_API_KEY` and install the optional client:
 
 ```bash
 pip install -e ".[openai]"
