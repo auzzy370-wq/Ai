@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## Project overview
 
-**Ai** is a minimal FastAPI service that exposes a health check and a chat endpoint. Without `OPENAI_API_KEY`, `/api/chat` returns deterministic mock replies so the app is runnable in any environment.
+**Ai** is a minimal FastAPI service with a built-in web chat UI (`/`), a health check (`/health`), and a chat API (`/api/chat`). Without `OPENAI_API_KEY`, `/api/chat` returns deterministic mock replies so the app is runnable in any environment.
 
 ## Cursor Cloud specific instructions
 
@@ -51,4 +51,6 @@ uvicorn ai_app.main:app --host 0.0.0.0 --port 8000
 
 - Mock mode is the default; no secrets are required for basic chat demos.
 - OpenAI integration is optional (`pip install openai` + `OPENAI_API_KEY`).
+- Chat UI: http://localhost:8000
 - API docs: http://localhost:8000/docs
+- Docker: `make docker-up` (requires Docker)
