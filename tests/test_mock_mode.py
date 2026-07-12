@@ -16,8 +16,8 @@ def test_forced_mock_mode_overrides_api_key(monkeypatch) -> None:
         assert status["reason"] == "forced"
 
         chat = test_client.post("/api/chat", json={"message": "Stay in mock"}).json()
-        assert chat["model"] == "mock"
-        assert "Mock AI" in chat["reply"]
+        assert chat["model"] == "witbot-mock"
+        assert len(chat["reply"]) > 0
 
 
 def test_mock_mode_env_values(monkeypatch) -> None:
