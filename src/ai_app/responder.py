@@ -137,7 +137,11 @@ def _mock_reply(message: str, history: list[ChatMessage]) -> str:  # noqa: PLR09
         "hello", "hi", "hey", "howdy", "sup", "yo",
         "greetings", "good morning", "good evening",
     }
-    if any(lower.startswith(g) or lower == g for g in greeting_words):
+    is_greeting = any(
+        lower == g or lower.startswith(g + " ") or lower.startswith(g + ",")
+        for g in greeting_words
+    )
+    if is_greeting:
         return _pick(_GREETING_RESPONSES, seed).replace("{msg}", message.strip())
 
     how_are_you_phrases = (
