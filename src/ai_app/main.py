@@ -14,7 +14,7 @@ load_dotenv()
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Ai", version="0.1.0")
+app = FastAPI(title="WitBot", version="0.2.0")
 
 cors_origins = get_cors_origins()
 if cors_origins:
