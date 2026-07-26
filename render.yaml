@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mlbb-advisor
+    runtime: python
+    buildCommand: pip install -e .
+    startCommand: uvicorn ai_app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHONPATH
+        value: src
+      - key: MOCK_MODE
+        value: "true"
+    autoDeploy: true
