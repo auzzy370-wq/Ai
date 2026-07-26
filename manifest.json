@@ -1,0 +1,15 @@
+{
+  "name": "MLBB Strategy Advisor",
+  "short_name": "MLBB Advisor",
+  "description": "Real-time draft picking and in-game strategy for any Mobile Legends hero.",
+  "start_url": "./",
+  "id": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#07090f",
+  "theme_color": "#07090f",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "./icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

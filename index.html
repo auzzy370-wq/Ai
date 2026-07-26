@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MLBB Advisor" />
+  <meta name="theme-color" content="#07090f" />
+  <link rel="manifest" href="manifest.json" />
+  <title>MLBB Strategy Advisor</title>
+  <style>
+    :root {
+      --bg: #07090f;
+      --panel: #0f1219;
+      --card: #141926;
+      --border: #1e2535;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --orange: #f97316;
+      --red: #ef4444;
+      --purple: #a855f7;
+      --yellow: #eab308;
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; height: 100%; overflow: hidden; }
+
+    /* ── LAYOUT ─────────────────────────────────────── */
+    #app { display: flex; flex-direction: column; height: 100dvh; height: 100vh; }
+
+    /* ── TOP BAR ─────────────────────────────────────── */
+    #topbar {
+      padding: calc(var(--sat) + 10px) calc(var(--sar) + 12px) 0 calc(var(--sal) + 12px);
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    }
+    #app-title { font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; flex: 1; }
+
+    /* ── TAB BAR ─────────────────────────────────────── */
+    #tabs {
+      display: flex; gap: 0; padding: 10px 12px 0;
+      padding-left: calc(var(--sal) + 12px);
+      padding-right: calc(var(--sar) + 12px);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1; padding: 9px 4px; text-align: center;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+      border: 1px solid var(--border); color: var(--muted);
+      cursor: pointer; transition: all .15s;
+    }
+    .tab:first-child { border-radius: 10px 0 0 10px; }
+    .tab:last-child  { border-radius: 0 10px 10px 0; border-left: none; }
+    .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* ── SCROLL AREA ─────────────────────────────────── */
+    #scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; padding: 12px 12px calc(var(--sab) + 16px); padding-left: calc(var(--sal) + 12px); padding-right: calc(var(--sar) + 12px); }
+
+    /* ── ADVICE CARD ─────────────────────────────────── */
+    .advice-card {
+      border-radius: 16px; padding: 18px 16px; margin-bottom: 14px;
+      border: 2px solid var(--border); position: relative; overflow: hidden;
+    }
+    .advice-card::before { content: ''; position: absolute; inset: 0; opacity: 0.06; }
+    .advice-card.retreat  { border-color: var(--red);    } .advice-card.retreat::before  { background: var(--red);    }
+    .advice-card.attack   { border-color: var(--orange); } .advice-card.attack::before   { background: var(--orange); }
+    .advice-card.farm     { border-color: var(--green);  } .advice-card.farm::before     { background: var(--green);  }
+    .advice-card.shadow   { border-color: var(--accent); } .advice-card.shadow::before   { background: var(--accent); }
+    .advice-card.draft    { border-color: var(--purple); } .advice-card.draft::before    { background: var(--purple); }
+    .advice-card.roam     { border-color: var(--muted);  }
+    .advice-action { font-size: 22px; font-weight: 900; margin: 0 0 4px; line-height: 1.1; }
+    .advice-detail { font-size: 14px; color: rgba(255,255,255,.75); margin: 0 0 10px; line-height: 1.4; }
+    .advice-combo  { font-size: 13px; font-weight: 700; padding: 8px 12px; background: rgba(0,0,0,.3); border-radius: 8px; font-family: monospace; letter-spacing: .3px; }
+    .advice-conf   { position: absolute; top: 14px; right: 14px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,.5); }
+
+    /* ── SECTION HEADERS ─────────────────────────────── */
+    .section-head { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+
+    /* ── CHIP GROUPS ─────────────────────────────────── */
+    .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+    .chip {
+      padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--border);
+      background: var(--card); color: var(--muted); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .12s; min-height: 44px; display: flex; align-items: center; justify-content: center;
+    }
+    .chip.sel-retreat { background: rgba(239,68,68,.2);  border-color: var(--red);    color: #fca5a5; }
+    .chip.sel-attack  { background: rgba(249,115,22,.2); border-color: var(--orange); color: #fdba74; }
+    .chip.sel-farm    { background: rgba(34,197,94,.2);  border-color: var(--green);  color: #86efac; }
+    .chip.sel         { background: rgba(59,130,246,.2); border-color: var(--accent); color: #93c5fd; }
+    .chip.sel-purple  { background: rgba(168,85,247,.2); border-color: var(--purple); color: #d8b4fe; }
+
+    /* ── ROLE BADGE ──────────────────────────────────── */
+    .role-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+    .role-Assassin  { background: rgba(239,68,68,.2); color: #fca5a5; }
+    .role-Fighter   { background: rgba(249,115,22,.2); color: #fdba74; }
+    .role-Mage      { background: rgba(168,85,247,.2); color: #d8b4fe; }
+    .role-Marksman  { background: rgba(234,179,8,.2);  color: #fde68a; }
+    .role-Support   { background: rgba(34,197,94,.2);  color: #86efac; }
+    .role-Tank      { background: rgba(100,116,139,.2); color: #cbd5e1; }
+
+    /* ── TIER BADGE ──────────────────────────────────── */
+    .tier-S  { color: #f87171; font-weight: 900; }
+    .tier-A  { color: #fb923c; font-weight: 900; }
+    .tier-B  { color: #facc15; font-weight: 700; }
+    .tier-C  { color: var(--muted); font-weight: 600; }
+
+    /* ── DRAFT BOARD ─────────────────────────────────── */
+    .draft-side { margin-bottom: 10px; }
+    .draft-side-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .draft-slots { display: flex; gap: 6px; }
+    .draft-slot {
+      flex: 1; min-height: 52px; border-radius: 10px; border: 1.5px dashed var(--border);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 10px; color: var(--muted); padding: 4px; text-align: center; gap: 2px;
+    }
+    .draft-slot.filled { border-style: solid; background: var(--card); color: var(--text); font-size: 10px; font-weight: 700; }
+    .draft-slot.enemy.filled  { border-color: rgba(239,68,68,.4); }
+    .draft-slot.ally.filled   { border-color: rgba(59,130,246,.4); }
+    .draft-slot.ban.filled    { border-color: rgba(100,116,139,.4); text-decoration: line-through; color: var(--muted); }
+    .draft-slot .slot-hero { font-size: 11px; font-weight: 700; line-height: 1.2; }
+    .draft-slot .slot-role { font-size: 9px; }
+
+    /* ── HERO PICKER MODAL ───────────────────────────── */
+    #hero-modal {
+      position: fixed; inset: 0; background: rgba(7,9,15,.97);
+      z-index: 100; display: none; flex-direction: column;
+      padding: calc(var(--sat) + 16px) 12px calc(var(--sab) + 16px);
+      padding-left: calc(var(--sal) + 12px); padding-right: calc(var(--sar) + 12px);
+    }
+    #hero-modal.open { display: flex; }
+    #modal-title { font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 12px; }
+    #hero-search {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--border);
+      background: var(--card); color: var(--text); font-size: 16px; margin-bottom: 10px;
+      outline: none; -webkit-appearance: none;
+    }
+    #hero-search:focus { border-color: var(--accent); }
+    #hero-filter { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+    .filter-chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; min-height: 36px; }
+    .filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #hero-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .hero-item {
+      display: flex; align-items: center; padding: 12px 10px; border-radius: 10px; cursor: pointer;
+      gap: 10px; transition: background .1s; min-height: 54px;
+    }
+    .hero-item:active { background: var(--card); }
+    .hero-item-name { flex: 1; font-size: 14px; font-weight: 700; }
+    #modal-cancel { margin-top: 10px; padding: 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--card); color: var(--muted); font-size: 14px; font-weight: 700; cursor: pointer; min-height: 50px; }
+
+    /* ── TIPS LIST ───────────────────────────────────── */
+    .tips-list { display: flex; flex-direction: column; gap: 6px; }
+    .tip-item { padding: 10px 12px; border-radius: 10px; background: var(--card); border-left: 3px solid var(--accent); font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.8); }
+
+    /* ── ACTION BUTTON CALLOUT ───────────────────────── */
+    .callout { background: var(--card); border-radius: 14px; padding: 14px; border: 1px solid var(--border); margin-bottom: 14px; }
+    .callout h3 { margin: 0 0 8px; font-size: 13px; font-weight: 800; color: var(--accent); }
+    .callout p  { margin: 0 0 6px; font-size: 12px; color: rgba(255,255,255,.65); line-height: 1.5; }
+    .callout ol { margin: 6px 0 0 16px; padding: 0; font-size: 12px; color: rgba(255,255,255,.65); line-height: 1.8; }
+
+    /* ── COUNTER/SYNERGY PILLS ───────────────────────── */
+    .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .pill.counter  { background: rgba(239,68,68,.15); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+    .pill.synergy  { background: rgba(34,197,94,.15);  color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .pill.weakTo   { background: rgba(249,115,22,.15); color: #fdba74; border: 1px solid rgba(249,115,22,.3); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span id="app-title">⚔️ MLBB Advisor</span>
+    <span id="current-mode-hero" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div id="tabs">
+    <div class="tab active" data-tab="draft" onclick="switchTab('draft')">📋 Draft</div>
+    <div class="tab" data-tab="ingame" onclick="switchTab('ingame')">🎮 In-Game</div>
+    <div class="tab" data-tab="setup" onclick="switchTab('setup')">⚙️ Setup</div>
+  </div>
+  <div id="scroll">
+
+    <!-- ═══════════════ DRAFT TAB ═══════════════ -->
+    <div id="tab-draft">
+
+      <div id="draft-advice-card"></div>
+
+      <!-- Enemy side -->
+      <div class="draft-side">
+        <div class="draft-side-label">🔴 Enemy Bans</div>
+        <div class="draft-slots" id="slots-eban"></div>
+      </div>
+      <div class="draft-side">
+        <div class="draft-side-label">🔴 Enemy Picks</div>
+        <div class="draft-slots" id="slots-epick"></div>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+      <!-- Ally side -->
+      <div class="draft-side">
+        <div class="draft-side-label">🔵 Your Bans</div>
+        <div class="draft-slots" id="slots-aban"></div>
+      </div>
+      <div class="draft-side">
+        <div class="draft-side-label">🔵 Your Team</div>
+        <div class="draft-slots" id="slots-apick"></div>
+      </div>
+
+      <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px">Tap any slot to add a hero · Tap a filled slot to remove</p>
+    </div>
+
+    <!-- ═══════════════ IN-GAME TAB ═══════════════ -->
+    <div id="tab-ingame" style="display:none">
+
+      <!-- Hero selector -->
+      <div class="section-head">Your Hero</div>
+      <div class="chip-group">
+        <div class="chip" id="ingame-hero-chip" style="flex:1;font-size:14px;font-weight:800" onclick="openHeroPicker('myHero')">
+          <span id="ingame-hero-label">Tap to select hero</span>
+        </div>
+      </div>
+
+      <!-- Advice card -->
+      <div id="ingame-advice-card" style="margin-top:14px"></div>
+
+      <!-- State inputs -->
+      <div class="section-head">Your State</div>
+      <div class="chip-group" id="chips-hp"></div>
+
+      <div class="section-head">Shadows Active (Hayabusa / shadow heroes)</div>
+      <div class="chip-group" id="chips-shadows"></div>
+
+      <div class="section-head">Skills</div>
+      <div class="chip-group" id="chips-skills"></div>
+
+      <div class="section-head">Enemy Visible Nearby?</div>
+      <div class="chip-group" id="chips-enemy"></div>
+
+      <div id="enemy-role-section" style="display:none">
+        <div class="section-head">Enemy Role</div>
+        <div class="chip-group" id="chips-erole"></div>
+        <div class="section-head">Enemy HP</div>
+        <div class="chip-group" id="chips-ehp"></div>
+      </div>
+
+      <div class="section-head">Allies Nearby</div>
+      <div class="chip-group" id="chips-allies"></div>
+
+      <div class="section-head">Context</div>
+      <div class="chip-group" id="chips-context"></div>
+
+      <!-- Hero tips -->
+      <div id="hero-tips-section" style="display:none">
+        <div class="section-head" id="hero-tips-title">Hero Tips</div>
+        <div class="tips-list" id="hero-tips-list"></div>
+
+        <div class="section-head">Counters (heroes you beat)</div>
+        <div class="pill-row" id="hero-counters"></div>
+        <div class="section-head">Weak Against</div>
+        <div class="pill-row" id="hero-weak"></div>
+        <div class="section-head">Synergy</div>
+        <div class="pill-row" id="hero-synergy"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SETUP TAB ═══════════════ -->
+    <div id="tab-setup" style="display:none">
+
+      <div class="callout">
+        <h3>📱 Add to Home Screen (Required)</h3>
+        <p>This app must be installed to your home screen to work like an app.</p>
+        <ol>
+          <li>Tap the <strong>Share</strong> button in Safari (box with arrow)</li>
+          <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
+          <li>Tap <strong>Add</strong> in the top-right corner</li>
+          <li>The app now appears as <strong>"MLBB Advisor"</strong> on your home screen</li>
+        </ol>
+      </div>
+
+      <div class="callout">
+        <h3>⚡ iPhone 16 Action Button — One-Press Access</h3>
+        <p>Map your Action Button to open this app instantly while playing MLBB.</p>
+        <ol>
+          <li>Open <strong>Settings → Action Button</strong></li>
+          <li>Swipe to <strong>Shortcut</strong></li>
+          <li>Tap <strong>Choose a Shortcut</strong></li>
+          <li>Tap <strong>+ Create Shortcut</strong></li>
+          <li>Add action: <strong>Open App → MLBB Advisor</strong></li>
+          <li>Save it, then select it in Action Button settings</li>
+        </ol>
+        <p style="margin-top:8px"><strong>Result:</strong> Press Action Button → advisor opens instantly. Press it again to go back to MLBB.</p>
+      </div>
+
+      <div class="callout">
+        <h3>🔄 Fastest Workflow While Playing</h3>
+        <ol>
+          <li>Press <strong>Action Button</strong> → advisor opens</li>
+          <li>Tap your HP + enemy situation (<strong>2–3 taps</strong>)</li>
+          <li>Read the advice card (2 seconds)</li>
+          <li>Press <strong>Action Button</strong> again → back to MLBB</li>
+          <li>Total away time: <strong>~5 seconds</strong></li>
+        </ol>
+      </div>
+
+      <div class="callout">
+        <h3>📋 Draft Phase Workflow</h3>
+        <ol>
+          <li>Switch to <strong>Draft tab</strong> before your ranked game starts</li>
+          <li>As bans/picks happen, tap each slot and enter the hero</li>
+          <li>Read the advice card — it updates after every pick</li>
+          <li>When it's your turn to pick, follow the recommended hero</li>
+        </ol>
+      </div>
+
+    </div>
+
+  </div><!-- end #scroll -->
+</div>
+
+<!-- ═══════════════ HERO PICKER MODAL ═══════════════ -->
+<div id="hero-modal">
+  <div id="modal-title">Select Hero</div>
+  <input id="hero-search" type="search" placeholder="Search hero name…" autocomplete="off" autocorrect="off" spellcheck="false" inputmode="search" />
+  <div id="hero-filter">
+    <div class="filter-chip active" data-role="All" onclick="filterRole(this)">All</div>
+    <div class="filter-chip" data-role="Assassin" onclick="filterRole(this)">Assassin</div>
+    <div class="filter-chip" data-role="Fighter" onclick="filterRole(this)">Fighter</div>
+    <div class="filter-chip" data-role="Mage" onclick="filterRole(this)">Mage</div>
+    <div class="filter-chip" data-role="Marksman" onclick="filterRole(this)">Marksman</div>
+    <div class="filter-chip" data-role="Support" onclick="filterRole(this)">Support</div>
+    <div class="filter-chip" data-role="Tank" onclick="filterRole(this)">Tank</div>
+  </div>
+  <div id="hero-list"></div>
+  <button id="modal-cancel" onclick="closeHeroPicker()">Cancel</button>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+// HERO DATABASE
+// ═══════════════════════════════════════════════════════
+// Format: [name, role, tier, hasCC, mobility(0=low,1=med,2=high)]
+const HERO_LIST = [
+  // ASSASSINS
+  ['Hayabusa','Assassin','S',false,2], ['Lancelot','Assassin','S',false,2],
+  ['Ling','Assassin','S',false,2], ['Fanny','Assassin','S',false,2],
+  ['Gusion','Assassin','S',false,2], ['Benedetta','Assassin','A',false,2],
+  ['Joy','Assassin','A',false,2], ['Arlott','Assassin','A',false,2],
+  ['Alucard','Assassin','B',false,1], ['Helcurt','Assassin','B',true,1],
+  ['Karina','Assassin','B',false,1], ['Saber','Assassin','B',true,1],
+  ['Natalia','Assassin','A',false,2], ['Julian','Assassin','A',false,2],
+  ['Nolan','Assassin','S',false,2], ['Yi Sun-shin','Assassin','A',false,1],
+  ['Hanzo','Assassin','B',false,1], ['Lesley','Assassin','B',false,0],
+  // FIGHTERS
+  ['Chou','Fighter','S',true,2], ['Yu Zhong','Fighter','S',false,1],
+  ['Aldous','Fighter','A',false,1], ['Paquito','Fighter','S',true,2],
+  ['Thamuz','Fighter','A',false,1], ['Jawhead','Fighter','A',true,1],
+  ['X.Borg','Fighter','A',false,0], ['Martis','Fighter','A',true,1],
+  ['Guinevere','Fighter','S',true,2], ['Freya','Fighter','B',true,1],
+  ['Sun','Fighter','B',false,1], ['Masha','Fighter','B',false,1],
+  ['Dyrroth','Fighter','A',false,1], ['Roger','Fighter','A',false,2],
+  ['Lapu-Lapu','Fighter','B',true,1], ['Zilong','Fighter','B',false,2],
+  ['Badang','Fighter','B',true,0], ['Argus','Fighter','B',false,1],
+  ['Silvanna','Fighter','A',true,1], ['Khaleed','Fighter','B',false,1],
+  ['Phoveus','Fighter','A',true,1], ['Terizla','Fighter','B',true,0],
+  ['Hilda','Fighter','B',false,1], ['Ruby','Fighter','A',true,2],
+  ['Barats','Fighter','A',true,1], ['Carmilla','Fighter','B',true,1],
+  ['Floryn','Fighter','B',false,1], ['Minsitthar','Fighter','A',true,0],
+  ['Bane','Fighter','C',false,0], ['Alpha','Fighter','B',false,1],
+  // MAGES
+  ['Lunox','Mage','S',false,1], ['Pharsa','Mage','A',true,2],
+  ['Vale','Mage','A',true,1], ['Kadita','Mage','A',true,2],
+  ['Aurora','Mage','A',true,0], ['Cyclops','Mage','B',true,1],
+  ['Harith','Mage','S',false,2], ['Luo Yi','Mage','A',true,1],
+  ['Alice','Mage','B',false,1], ['Kagura','Mage','S',true,2],
+  ['Lylia','Mage','A',false,2], ['Odette','Mage','B',true,0],
+  ['Xavier','Mage','A',false,0], ['Cecilion','Mage','A',false,0],
+  ['Esmeralda','Mage','S',false,1], ['Valentina','Mage','S',false,1],
+  ['Yve','Mage','A',true,0], ['Nana','Mage','A',true,1],
+  ['Chang\'e','Mage','B',false,1], ['Faramis','Mage','A',true,1],
+  ['Zhuxin','Mage','A',true,1], ['Novaria','Mage','A',false,0],
+  ['Vexana','Mage','B',false,0], ['Eudora','Mage','B',true,0],
+  // MARKSMEN
+  ['Layla','Marksman','C',false,0], ['Miya','Marksman','C',false,1],
+  ['Bruno','Marksman','B',false,1], ['Clint','Marksman','B',false,1],
+  ['Moskov','Marksman','B',true,1], ['Granger','Marksman','S',false,1],
+  ['Beatrix','Marksman','S',false,1], ['Irithel','Marksman','B',false,1],
+  ['Brody','Marksman','A',true,1], ['Wanwan','Marksman','S',false,2],
+  ['Melissa','Marksman','A',true,0], ['Natan','Marksman','A',false,1],
+  ['Ixia','Marksman','A',false,0], ['Popol and Kupa','Marksman','A',true,1],
+  ['Kimmy','Marksman','A',false,1], ['Claude','Marksman','A',false,2],
+  ['Hanabi','Marksman','B',true,0], ['Karrie','Marksman','A',false,1],
+  ['Roger','Marksman','A',false,2], ['Lesley','Marksman','B',false,0],
+  // SUPPORTS
+  ['Estes','Support','A',false,0], ['Angela','Support','A',false,0],
+  ['Rafaela','Support','B',true,0], ['Diggie','Support','A',true,0],
+  ['Mathilda','Support','S',true,2], ['Floryn','Support','A',false,0],
+  ['Kaja','Support','A',true,1], ['Lolita','Support','A',true,0],
+  ['Nana','Support','A',true,1], ['Faramis','Support','A',true,1],
+  ['Chip','Support','A',true,1], ['Yz','Support','A',true,0],
+  // TANKS
+  ['Tigreal','Tank','S',true,0], ['Johnson','Tank','S',true,1],
+  ['Khufra','Tank','S',true,1], ['Hylos','Tank','A',true,0],
+  ['Grock','Tank','A',true,0], ['Atlas','Tank','S',true,1],
+  ['Uranus','Tank','A',false,1], ['Belerick','Tank','B',true,0],
+  ['Akai','Tank','A',true,1], ['Franco','Tank','A',true,0],
+  ['Gatotkaca','Tank','A',true,1], ['Gloo','Tank','A',true,1],
+  ['Baxia','Tank','A',true,1], ['Minotaur','Tank','B',true,0],
+  ['Edith','Tank','A',false,1], ['Hyrros','Tank','A',true,0],
+];
+
+// Detailed data for popular heroes
+const HERO_DETAIL = {
+  'Hayabusa': {
+    combo: 'S2 (place shadow) → S1 → Auto × 2 → S2 (swap to shadow) → Ult',
+    tips: [
+      'ALWAYS place a shadow before engaging — it is your escape route',
+      'NEVER use Ultimate on tanks or full-HP enemies (it is wasted)',
+      'With 3 shadows active, Ultimate melts any squishy',
+      'Shadow swap cancels enemy CC if timed right',
+      'Rotate your shadow positions to bait enemies into chasing',
+    ],
+    counters: ['Gusion','Harith','Brody'],
+    weakTo: ['Kaja','Chou','Franco','Aurora','Tigreal'],
+    synergy: ['Atlas','Mathilda','Chip'],
+    winCon: 'Find isolated targets in the side-lane or jungle. One-shot carries before they can react.',
+  },
+  'Lancelot': {
+    combo: 'S2 (mark) → S1 × 3 (reposition) → Basic Attack → S2 → Ult',
+    tips: [
+      'S1 gives 3 dashes — weave them around enemy skills to dodge CC',
+      'Ultimate makes you immune to CC; use it when CC is thrown at you',
+      'Target the backline (marksman/mage) in every fight',
+      'S2 mark increases damage taken — always apply before full combo',
+    ],
+    counters: ['Gusion','Lunox','Karina'],
+    weakTo: ['Chou','Tigreal','Khufra','Minsitthar'],
+    synergy: ['Mathilda','Atlas','Rafaela'],
+    winCon: 'Burst carries in under 1 second. Use S1 dashes to dodge skill shots.',
+  },
+  'Ling': {
+    combo: 'Wall-jump → S1 × 3 (burst + reset) → Ult (stun all)',
+    tips: [
+      'Charge Lightness Stack before fights by walking along walls',
+      'S1 resets every kill — chain kills across the map',
+      'Ultimate lands from walls — drop from unexpected angles',
+      'Use walls to escape ganks instantly',
+    ],
+    counters: ['Marksmen in open areas','Odette'],
+    weakTo: ['Kaja','Chou','Phoveus'],
+    synergy: ['Atlas','Vale','Luo Yi'],
+    winCon: 'Splitpush walls then rotate with Ultimate to wipe teamfights.',
+  },
+  'Chou': {
+    combo: 'S1 → 3× Basic Attacks → S2 (kick) → Ult (finisher or peel)',
+    tips: [
+      'S1 gives CC immunity — use it to walk through enemy CC',
+      'Kick carries into your team, not away from your team',
+      'S2 + Ult combo one-shots squishy heroes at mid-game',
+      'Body of Steel passive procs on S1 — never skip the 3 AAs',
+    ],
+    counters: ['Most assassins','Squishy carries'],
+    weakTo: ['Ruby','Silvanna','Minsitthar'],
+    synergy: ['Hayabusa','Ling','Lancelot'],
+    winCon: 'Kick the enemy carry into your damage dealers every teamfight.',
+  },
+  'Gusion': {
+    combo: 'S2 (throw daggers) → S1 (blink) → Basic Attack → S1 → S2 (recall daggers)',
+    tips: [
+      'S2 → S1 instantly — the dagger recall resets every time',
+      'Full combo takes under 1 second; practice in training mode',
+      'Energy management is critical — don\'t burn skills on minions',
+      'Use S1 to dodge CC during your combo',
+    ],
+    counters: ['Karina','Gusion mirror','Alucard'],
+    weakTo: ['Chou','Khufra','Minsitthar','Kaja'],
+    synergy: ['Atlas','Tigreal','Khufra'],
+    winCon: 'Burst one hero in 0.5 seconds. If combo is blocked, retreat and wait for CD reset.',
+  },
+  'Fanny': {
+    combo: 'Cable (energy charge) → Cable × 3 (hit → pull → repeat) → S2 when cornered',
+    tips: [
+      'MUST have ≥ 65 energy to start a full cable combo',
+      'Blue buff makes Fanny nearly unkillable — always secure it',
+      'Hit walls between cable hits to maintain momentum',
+      'Retreat the moment cable energy runs below 20',
+    ],
+    counters: ['Carries without escape'],
+    weakTo: ['Khufra','Franco','Chou','Minsitthar'],
+    synergy: ['Estes','Angela','Rafaela'],
+    winCon: 'Cable-dive the enemy backline. Kill and escape before CC lands.',
+  },
+  'Granger': {
+    combo: 'S1 (dash + 6 bullets) → Basic Attack (7th bullet crits) → S2 if needed → Ult to finish',
+    tips: [
+      '7th basic attack always crits — count your bullets',
+      'S1 bullet reloads fast — spam it in teamfights',
+      'Ultimate travels through walls; use for cross-map kills',
+      'Position far back — you are a glass cannon',
+    ],
+    counters: ['Assassins without gap-close','Long-range mages'],
+    weakTo: ['Lancelot','Hayabusa','Benedetta','Ling'],
+    synergy: ['Atlas','Mathilda','Kaja'],
+    winCon: 'Poke from range. Burst isolated or low-HP enemies with S1 + 7th AA.',
+  },
+  'Beatrix': {
+    combo: 'Renner (snipe): S2 + Ult snipe at 900 range. Wesker (close): S1 dash + shotgun burst',
+    tips: [
+      'Switch weapons for the situation — Renner snipes, Bennett waves, Wesker 1v1s',
+      'Renner Ult can kill from across the map — use it to clean up',
+      'Never auto-attack with Renner at close range',
+      'Use Wesker to fight assassins that get on you',
+    ],
+    counters: ['Immobile heroes','Low-HP enemies'],
+    weakTo: ['Lancelot','Fanny','Ling','Claude'],
+    synergy: ['Khufra','Atlas','Tigreal'],
+    winCon: 'Snipe from safety with Renner. Swap to Wesker or Nibiru for close fights.',
+  },
+  'Kagura': {
+    combo: 'S1 (attach umbrella) → S2 (slow) → Basic Attack → S2 → S1 (return) → Ult (reset)',
+    tips: [
+      'Throw umbrella FIRST, then all skills deal extra damage around it',
+      'S2 used when attached to umbrella: pulls you to umbrella (escape)',
+      'Ult resets skill CDs — always follow Ult with a fresh full combo',
+      'Position umbrella behind enemies before engaging',
+    ],
+    counters: ['Squishy carries','Immobile mages'],
+    weakTo: ['Hayabusa','Lancelot','Gusion'],
+    synergy: ['Atlas','Chou','Franco'],
+    winCon: 'Umbrella placement decides fights. Trap enemies between you and the umbrella.',
+  },
+  'Khufra': {
+    combo: 'S2 (bounce into enemies) → S1 (extend) → Basic Attack × 2 → Ult (compress)',
+    tips: [
+      'S2 bounces cancel all dash skills — jump on Fanny, Ling, Lancelot',
+      'Ult knocks everyone into you — cast near a wall for bonus stun',
+      'S1 extends reach to land skill combos',
+      'Initiate from fog / bush for surprise engage',
+    ],
+    counters: ['Fanny','Ling','Lancelot','All dash-heavy heroes'],
+    weakTo: ['Esmeralda','Uranus','sustained damage'],
+    synergy: ['All burst heroes','Harith','Gusion'],
+    winCon: 'Lock down an enemy carry with S2 + Ult. Let your team kill them.',
+  },
+  'Atlas': {
+    combo: 'S1 (link enemies) → Flash / Petrify → Ult (pull all linked enemies)',
+    tips: [
+      'S1 links can chain across multiple enemies — initiate into a group',
+      'Ult pulls ALL linked enemies together — perfect for burst AoE',
+      'Sprint + Ult catch enemies who try to run',
+      'Pair with burst mages or assassins for instant team wipes',
+    ],
+    counters: ['Grouped enemies','Immobile carries'],
+    weakTo: ['Spread-out enemies','Purify users'],
+    synergy: ['Vale','Pharsa','Lunox','Kagura'],
+    winCon: 'Pull 3–5 enemies together. One Ult can end a teamfight instantly.',
+  },
+  'Tigreal': {
+    combo: 'S1 (charge into enemies) → Basic Attack → S2 (pull) → Ult (stun all nearby)',
+    tips: [
+      'S1 + S2 = instant pull combo; enemies can\'t escape once pulled',
+      'Ult radius is large — cast when 2+ enemies are close',
+      'Use Arrival rune to teleport to lanes and initiate instantly',
+      'Build Dominance Ice to reduce enemy attack speed',
+    ],
+    counters: ['Grouped enemies','Low-mobility carries'],
+    weakTo: ['Poke compositions','Harass mages'],
+    synergy: ['Lunox','Vale','Guinevere','Gusion'],
+    winCon: 'Dive the backline with S1, pull them with S2, Ult to stun, delete with your team.',
+  },
+  'Mathilda': {
+    combo: 'S1 (stack) × 3 → S2 (shield ally + link) → Ult (fly ally to target)',
+    tips: [
+      'S2 + Ult combo flies an ally (like Ling or Lancelot) directly to any target',
+      'Keep stacking S1 on yourself to build shield first',
+      'S2 protects you AND an ally — cast on the one being dived',
+      'Ult can be interrupted — cast from safe position',
+    ],
+    counters: ['Targeted heroes','Immobile enemies'],
+    weakTo: ['Silence','Khufra (counter-dash)'],
+    synergy: ['Ling','Lancelot','Hayabusa'],
+    winCon: 'Launch your carry directly onto the enemy backline. Peel for them with S2.',
+  },
+  'Wanwan': {
+    combo: 'Hit all 4 weak points with S1 + AA → Ult (auto-aim all enemies)',
+    tips: [
+      'Ult activates only after hitting all 4 weak points — hit them quickly',
+      'S2 gives CC immunity during animation — use to dodge CC',
+      'In teamfights, always prioritize hitting different weak point directions',
+      'Build attack speed to hit weak points faster',
+    ],
+    counters: ['Grouped melee heroes','Slow initiation teams'],
+    weakTo: ['Burst assassins who dive instantly'],
+    synergy: ['Estes','Angela','Mathilda'],
+    winCon: 'Trigger Ult mid-teamfight to shred all enemies. Build attack speed early.',
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const STATE_KEY = 'mlbb_advisor_state';
+let state = loadState();
+
+function loadState() {
+  try {
+    return JSON.parse(localStorage.getItem(STATE_KEY)) || defaultState();
+  } catch { return defaultState(); }
+}
+
+function defaultState() {
+  return {
+    tab: 'draft',
+    myHero: null,
+    // Draft slots: each slot = { hero: string|null, role: string|null }
+    eban:  [null,null,null],
+    epick: [null,null,null,null,null],
+    aban:  [null,null,null],
+    apick: [null,null,null,null,null],
+    // In-game state
+    hp: 'high',
+    shadows: '0',
+    skills: 'ready',
+    enemyNearby: 'no',
+    enemyRole: null,
+    enemyHp: 'med',
+    allies: '0',
+    campNearby: 'no',
+    objectiveUp: 'no',
+  };
+}
+
+function saveState() {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+
+// ═══════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+function switchTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  ['draft','ingame','setup'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'draft') renderDraft();
+  if (tab === 'ingame') { renderIngame(); renderIngameAdvice(); }
+  document.getElementById('scroll').scrollTop = 0;
+}
+
+// ═══════════════════════════════════════════════════════
+// HERO PICKER
+// ═══════════════════════════════════════════════════════
+let pickerTarget = null; // which slot we're filling
+
+function openHeroPicker(target) {
+  pickerTarget = target;
+  document.getElementById('hero-search').value = '';
+  document.getElementById('hero-modal').classList.add('open');
+  filterRole(document.querySelector('#hero-filter .filter-chip'));
+  renderHeroList('', 'All');
+  setTimeout(() => document.getElementById('hero-search').focus(), 100);
+}
+
+function closeHeroPicker() {
+  document.getElementById('hero-modal').classList.remove('open');
+  pickerTarget = null;
+}
+
+function filterRole(el) {
+  document.querySelectorAll('#hero-filter .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderHeroList(document.getElementById('hero-search').value, el.dataset.role);
+}
+
+document.getElementById('hero-search').addEventListener('input', e => {
+  const active = document.querySelector('#hero-filter .filter-chip.active');
+  renderHeroList(e.target.value, active ? active.dataset.role : 'All');
+});
+
+function renderHeroList(query, role) {
+  const q = query.toLowerCase();
+  const filtered = HERO_LIST.filter(h => {
+    const matchRole = role === 'All' || h[1] === role;
+    const matchName = !q || h[0].toLowerCase().includes(q);
+    return matchRole && matchName;
+  });
+  const list = document.getElementById('hero-list');
+  list.innerHTML = filtered.map(h => `
+    <div class="hero-item" onclick="pickHero('${h[0]}')">
+      <div style="flex:1">
+        <span class="hero-item-name">${h[0]}</span>
+        <span class="role-badge role-${h[1]}" style="margin-left:6px">${h[1]}</span>
+      </div>
+      <span class="tier-${h[2]}">${h[2]}</span>
+    </div>
+  `).join('');
+}
+
+function pickHero(name) {
+  const target = pickerTarget;
+  closeHeroPicker();
+
+  if (target === 'myHero') {
+    state.myHero = name;
+    saveState();
+    renderIngame();
+    renderIngameAdvice();
+    return;
+  }
+
+  // Draft slot: target = 'eban_0', 'epick_2', etc.
+  const [slotGroup, idx] = target.split('_');
+  const i = parseInt(idx);
+  if (slotGroup === 'eban')  state.eban[i]  = name;
+  if (slotGroup === 'epick') state.epick[i] = name;
+  if (slotGroup === 'aban')  state.aban[i]  = name;
+  if (slotGroup === 'apick') state.apick[i] = name;
+  saveState();
+  renderDraft();
+}
+
+// ═══════════════════════════════════════════════════════
+// DRAFT RENDER
+// ═══════════════════════════════════════════════════════
+function renderDraft() {
+  renderSlots('eban',  state.eban,  3, 'enemy', true);
+  renderSlots('epick', state.epick, 5, 'enemy', false);
+  renderSlots('aban',  state.aban,  3, 'ally',  true);
+  renderSlots('apick', state.apick, 5, 'ally',  false);
+  renderDraftAdvice();
+}
+
+function renderSlots(id, arr, count, side, isBan) {
+  const container = document.getElementById(`slots-${id}`);
+  container.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const hero = arr[i];
+    const heroData = hero ? HERO_LIST.find(h => h[0] === hero) : null;
+    const role = heroData ? heroData[1] : '';
+    const div = document.createElement('div');
+    div.className = `draft-slot ${side} ${hero ? 'filled' : ''} ${isBan && hero ? 'ban' : ''}`;
+    if (hero) {
+      div.innerHTML = `<span class="slot-hero">${hero}</span><span class="slot-role">${role}</span>`;
+      div.onclick = () => {
+        arr[i] = null; saveState(); renderDraft();
+      };
+    } else {
+      div.innerHTML = `<span style="font-size:18px;opacity:.4">${isBan ? '🚫' : '+'}</span>`;
+      div.onclick = () => openHeroPicker(`${id}_${i}`);
+    }
+    container.appendChild(div);
+  }
+}
+
+function renderDraftAdvice() {
+  const card = document.getElementById('draft-advice-card');
+  const advice = getDraftAdvice();
+  card.innerHTML = renderAdviceCard(advice);
+}
+
+function getDraftAdvice() {
+  const bannedHeroes = [...state.eban, ...state.aban].filter(Boolean);
+  const enemyPicks = state.epick.filter(Boolean);
+  const allyPicks  = state.apick.filter(Boolean);
+
+  if (enemyPicks.length === 0 && allyPicks.length === 0) {
+    return {
+      type: 'draft', emoji: '📋',
+      action: 'Fill in the draft board',
+      detail: 'Add enemy picks/bans as they happen. The advisor updates after every pick.',
+      combo: 'Start by adding enemy bans, then picks',
+      confidence: 100,
+    };
+  }
+
+  // Analyse enemy composition
+  const enemyRoles = enemyPicks.map(h => (HERO_LIST.find(x=>x[0]===h)||['',''])[1]);
+  const allyRoles  = allyPicks.map(h  => (HERO_LIST.find(x=>x[0]===h)||['',''])[1]);
+  const enemyHasCC  = enemyPicks.some(h => (HERO_LIST.find(x=>x[0]===h)||[])[3]);
+  const enemyTanks  = enemyRoles.filter(r => r === 'Tank').length;
+  const enemySquish = enemyRoles.filter(r => ['Mage','Marksman','Assassin'].includes(r)).length;
+  const allyHasTank = allyRoles.includes('Tank');
+  const allyHasCC   = allyPicks.some(h  => (HERO_LIST.find(x=>x[0]===h)||[])[3]);
+  const allyHasSupp = allyRoles.includes('Support');
+  const allyHasMM   = allyRoles.includes('Marksman');
+  const allyHasMage = allyRoles.includes('Mage');
+  const myPicksDone = allyPicks.length;
+
+  // Ban recommendations (not already banned)
+  const metaBans = ['Ling','Fanny','Khufra','Mathilda','Tigreal','Atlas','Kagura','Lunox','Granger','Wanwan','Chou','Beatrix'];
+  const recBans = metaBans.filter(h => !bannedHeroes.includes(h) && !enemyPicks.includes(h)).slice(0,2);
+
+  // Pick recommendation based on missing roles and counters
+  let recHero = null, recReason = '';
+
+  if (!allyHasTank) {
+    // Team needs a tank
+    const topTanks = ['Khufra','Atlas','Tigreal','Johnson'].filter(h => !bannedHeroes.includes(h) && !allyPicks.includes(h));
+    if (topTanks[0]) { recHero = topTanks[0]; recReason = 'Team needs a tank — pick ' + topTanks[0]; }
+  }
+
+  if (!recHero && !allyHasMM) {
+    const topMM = ['Beatrix','Wanwan','Granger','Brody'].filter(h => !bannedHeroes.includes(h) && !allyPicks.includes(h));
+    if (topMM[0]) { recHero = topMM[0]; recReason = 'Team needs a Marksman — pick ' + topMM[0]; }
+  }
+
+  if (!recHero && !allyHasMage) {
+    const topMage = ['Lunox','Kagura','Harith','Vale'].filter(h => !bannedHeroes.includes(h) && !allyPicks.includes(h));
+    if (topMage[0]) { recHero = topMage[0]; recReason = 'Team needs burst magic damage — pick ' + topMage[0]; }
+  }
+
+  if (!recHero && enemySquish >= 3 && !enemyHasCC) {
+    const topAssassin = ['Lancelot','Hayabusa','Ling','Gusion'].filter(h => !bannedHeroes.includes(h) && !allyPicks.includes(h));
+    if (topAssassin[0]) { recHero = topAssassin[0]; recReason = 'Enemy has no CC and 3+ squishies — full assassin value with ' + topAssassin[0]; }
+  }
+
+  if (!recHero) {
+    const metaPicks = ['Khufra','Mathilda','Lancelot','Lunox','Beatrix','Atlas'].filter(h => !bannedHeroes.includes(h) && !allyPicks.includes(h));
+    if (metaPicks[0]) { recHero = metaPicks[0]; recReason = 'S-tier meta pick with no clear role gap'; }
+  }
+
+  const bansText = recBans.length ? `Ban: ${recBans.join(', ')}` : 'Flexible on bans';
+
+  let compNote = '';
+  if (enemyTanks >= 2) compNote = 'Enemy has heavy tank front — buy Malefic Roar / Sea Halberd.';
+  else if (enemyHasCC) compNote = `Enemy has heavy CC — consider buying Purify spell.`;
+  else if (!allyHasCC && enemySquish >= 2) compNote = 'Your team lacks CC — pick a hero with crowd control.';
+
+  return {
+    type: 'draft', emoji: '🎯',
+    action: recHero ? `PICK: ${recHero}` : 'Flex pick — all roles filled',
+    detail: recReason + (compNote ? '\n' + compNote : ''),
+    combo: bansText,
+    confidence: recHero ? 82 : 65,
+    extra: `Enemy CC: ${enemyHasCC?'Heavy':'Light'} · Tanks: ${enemyTanks} · Squishies: ${enemySquish}`,
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// IN-GAME RENDER
+// ═══════════════════════════════════════════════════════
+function renderIngame() {
+  const hero = state.myHero;
+  document.getElementById('ingame-hero-label').textContent = hero || 'Tap to select hero';
+  document.getElementById('current-mode-hero').textContent = hero ? `· ${hero}` : '';
+
+  // Build chip groups
+  buildChips('chips-hp', [
+    { label:'🔴 Critical (<25%)', val:'critical' },
+    { label:'🟠 Low (25-50%)',    val:'low' },
+    { label:'🟡 Medium (50-75%)', val:'med' },
+    { label:'🟢 High (>75%)',     val:'high' },
+  ], 'hp', () => renderIngameAdvice());
+
+  buildChips('chips-shadows', [
+    { label:'0', val:'0' }, { label:'1 shadow', val:'1' },
+    { label:'2 shadows', val:'2' }, { label:'3 shadows', val:'3' },
+  ], 'shadows', () => renderIngameAdvice());
+
+  buildChips('chips-skills', [
+    { label:'✅ All Ready', val:'ready' },
+    { label:'⌛ Some CD',   val:'some' },
+    { label:'❌ All CD',    val:'cd' },
+  ], 'skills', () => renderIngameAdvice());
+
+  buildChips('chips-enemy', [
+    { label:'⚠️ Yes, enemy near', val:'yes' },
+    { label:'✅ No enemy',         val:'no' },
+  ], 'enemyNearby', () => {
+    document.getElementById('enemy-role-section').style.display = state.enemyNearby === 'yes' ? '' : 'none';
+    renderIngameAdvice();
+  });
+
+  buildChips('chips-erole', [
+    { label:'🔫 Marksman', val:'Marksman' }, { label:'🔮 Mage',     val:'Mage' },
+    { label:'🛡️ Tank',    val:'Tank' },     { label:'👊 Fighter',  val:'Fighter' },
+    { label:'🗡️ Assassin',val:'Assassin' }, { label:'💚 Support',  val:'Support' },
+  ], 'enemyRole', () => renderIngameAdvice());
+
+  buildChips('chips-ehp', [
+    { label:'🔴 Low HP', val:'low' }, { label:'🟡 Medium', val:'med' }, { label:'🟢 High HP', val:'high' },
+  ], 'enemyHp', () => renderIngameAdvice());
+
+  buildChips('chips-allies', [
+    { label:'Alone', val:'0' }, { label:'1–2 allies', val:'1' }, { label:'3–4 allies', val:'3' },
+  ], 'allies', () => renderIngameAdvice());
+
+  buildChips('chips-context', [
+    { label:'🌿 Camp nearby', val:'campNearby', toggle: true },
+    { label:'🏆 Objective up', val:'objectiveUp', toggle: true },
+  ], null, () => renderIngameAdvice(), true);
+
+  // Update enemy role section visibility
+  document.getElementById('enemy-role-section').style.display = state.enemyNearby === 'yes' ? '' : 'none';
+
+  // Render hero-specific tips
+  renderHeroTips(hero);
+}
+
+function buildChips(containerId, options, stateKey, onChange, isToggle = false) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  for (const opt of options) {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = opt.label;
+
+    if (isToggle) {
+      // Toggle chips (like "camp nearby", "objective up")
+      const togKey = opt.val;
+      if (state[togKey] === 'yes') chip.classList.add('sel-farm');
+      chip.onclick = () => {
+        state[togKey] = state[togKey] === 'yes' ? 'no' : 'yes';
+        chip.classList.toggle('sel-farm', state[togKey] === 'yes');
+        saveState(); onChange();
+      };
+    } else {
+      const isSelected = state[stateKey] === opt.val;
+      if (isSelected) {
+        const cls = stateKey === 'hp' && ['critical','low'].includes(opt.val) ? 'sel-retreat'
+                  : stateKey === 'hp' && opt.val === 'med' ? 'sel-attack'
+                  : stateKey === 'enemyRole' && opt.val === 'Tank' ? ''
+                  : 'sel';
+        if (cls) chip.classList.add(cls);
+      }
+      chip.onclick = () => {
+        state[stateKey] = opt.val;
+        saveState();
+        renderIngame();
+        onChange();
+      };
+    }
+    container.appendChild(chip);
+  }
+}
+
+function renderHeroTips(heroName) {
+  const section = document.getElementById('hero-tips-section');
+  const detail = heroName ? HERO_DETAIL[heroName] : null;
+  if (!detail) { section.style.display = 'none'; return; }
+
+  section.style.display = '';
+  document.getElementById('hero-tips-title').textContent = `${heroName} Tips`;
+  document.getElementById('hero-tips-list').innerHTML = detail.tips.map(t =>
+    `<div class="tip-item">${t}</div>`
+  ).join('');
+  document.getElementById('hero-counters').innerHTML = (detail.counters||[]).map(h =>
+    `<span class="pill counter">Beats ${h}</span>`).join('');
+  document.getElementById('hero-weak').innerHTML = (detail.weakTo||[]).map(h =>
+    `<span class="pill weakTo">Weak vs ${h}</span>`).join('');
+  document.getElementById('hero-synergy').innerHTML = (detail.synergy||[]).map(h =>
+    `<span class="pill synergy">+ ${h}</span>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// IN-GAME ADVICE ENGINE
+// ═══════════════════════════════════════════════════════
+function renderIngameAdvice() {
+  const card = document.getElementById('ingame-advice-card');
+  card.innerHTML = renderAdviceCard(getIngameAdvice());
+}
+
+function getIngameAdvice() {
+  const { hp, shadows, skills, enemyNearby, enemyRole, enemyHp, allies, campNearby, objectiveUp, myHero } = state;
+  const heroData = myHero ? HERO_LIST.find(h => h[0] === myHero) : null;
+  const heroRole = heroData ? heroData[1] : null;
+  const detail = myHero ? HERO_DETAIL[myHero] : null;
+
+  // ─── 1. Retreat ───────────────────────────────────────
+  if (hp === 'critical') {
+    const hasShadow = parseInt(shadows) > 0;
+    const isHayabusa = myHero === 'Hayabusa';
+    return {
+      type: 'retreat', emoji: '⬅️',
+      action: 'RETREAT NOW',
+      detail: `HP is critical (<25%). ${enemyNearby === 'yes' ? 'Enemy is nearby — use any escape now.' : 'Get to safety before re-engaging.'}`,
+      combo: isHayabusa && hasShadow ? 'S2 (teleport to shadow) → Run to tower'
+           : hasShadow ? 'Teleport escape → Run'
+           : 'Flash or dash to safety → Recall',
+      confidence: 97,
+    };
+  }
+
+  if (hp === 'low' && enemyNearby === 'yes' && allies === '0') {
+    return {
+      type: 'retreat', emoji: '⬅️',
+      action: 'FALL BACK',
+      detail: 'Low HP + enemy nearby + alone = high death risk. Retreat to ally or tower.',
+      combo: 'Disengage → Heal / Recall',
+      confidence: 88,
+    };
+  }
+
+  // ─── 2. Objective ─────────────────────────────────────
+  if (objectiveUp === 'yes' && parseInt(allies) >= 1) {
+    return {
+      type: 'farm', emoji: '🏆',
+      action: 'CONTEST OBJECTIVE',
+      detail: `Objective is up. ${allies === '3' ? 'Full team nearby — secure it.' : 'Don\'t contest alone.'}`,
+      combo: allies === '3' ? 'Fight for objective now' : 'Wait for more allies before contesting',
+      confidence: 85,
+    };
+  }
+
+  // ─── 3. Enemy engagement ──────────────────────────────
+  if (enemyNearby === 'yes' && skills !== 'cd') {
+    const isTank = enemyRole === 'Tank';
+    const isAssassin = ['Assassin','Fighter'].includes(heroRole);
+
+    if (isTank && isAssassin) {
+      return {
+        type: 'roam', emoji: '🚫',
+        action: 'AVOID THE TANK',
+        detail: `As ${heroRole}, never waste skills on tanks. They absorb damage and waste your CDs.`,
+        combo: detail ? `Find their ${detail.counters?.[0] || 'carry'} instead` : 'Rotate and find a squishy target',
+        confidence: 90,
+      };
+    }
+
+    if (!isTank && (hp === 'high' || hp === 'med')) {
+      const isLowEnemyHp = enemyHp === 'low';
+      const hasShadows = parseInt(shadows) > 0;
+      const combo = detail?.combo
+        || getGenericCombo(heroRole, hasShadows, isLowEnemyHp);
+      return {
+        type: 'attack', emoji: '⚔️',
+        action: `ENGAGE ${enemyRole ? enemyRole.toUpperCase() : 'ENEMY'}`,
+        detail: `${enemyHp === 'low' ? 'Enemy is low HP — finish them.' : 'Skills ready and HP acceptable — engage.'} ${parseInt(allies) >= 1 ? 'Allies nearby for backup.' : 'No allies — commit only if confident.'}`,
+        combo,
+        confidence: isLowEnemyHp ? 92 : 78,
+      };
+    }
+
+    // Skills on CD — poke only
+    if (skills === 'some') {
+      return {
+        type: 'roam', emoji: '🎯',
+        action: 'POKE — DON\'T COMMIT',
+        detail: 'Some skills on CD. Poke with basic attacks but do not start a full trade.',
+        combo: 'Basic attack poke → retreat when they retaliate',
+        confidence: 70,
+      };
+    }
+  }
+
+  // ─── 4. Shadow placement (Hayabusa-specific) ──────────
+  if (myHero === 'Hayabusa' && parseInt(shadows) === 0 && skills !== 'cd') {
+    return {
+      type: 'shadow', emoji: '👥',
+      action: 'PLACE SHADOW',
+      detail: 'You have no shadows placed. Always keep at least 1 shadow as an escape route before engaging.',
+      combo: 'S2 → place shadow at safe position',
+      confidence: 85,
+    };
+  }
+
+  // ─── 5. Farm jungle ───────────────────────────────────
+  if (campNearby === 'yes' && (enemyNearby === 'no' || hp === 'high')) {
+    return {
+      type: 'farm', emoji: '🌿',
+      action: 'FARM JUNGLE',
+      detail: `Camp is nearby and no immediate threat. Farm for gold and ${heroRole === 'Marksman' ? 'items' : 'power spike'}.`,
+      combo: detail?.combo ? `${detail.combo.split('→')[0].trim()} on camp` : 'Clear camp with skills',
+      confidence: 82,
+    };
+  }
+
+  // ─── 6. Enemy nearby but can't engage safely ──────────
+  if (enemyNearby === 'yes' && (hp === 'low' || skills === 'cd')) {
+    return {
+      type: 'roam', emoji: '⏳',
+      action: 'WAIT FOR CD / HEAL',
+      detail: `${skills === 'cd' ? 'Skills on cooldown — don\'t fight without them.' : 'HP too low for a fair trade.'} Position safely and wait.`,
+      combo: 'Stay in bush / behind tower until ready',
+      confidence: 75,
+    };
+  }
+
+  // ─── 7. Roam ──────────────────────────────────────────
+  const roamAdvice = getRoamAdvice(heroRole, allies);
+  return {
+    type: 'roam', emoji: '🗺️',
+    action: 'ROAM / ROTATE',
+    detail: roamAdvice,
+    combo: parseInt(allies) >= 2 ? 'Join teamfight or contest objective' : 'Find jungle camp or gank a lane',
+    confidence: 60,
+  };
+}
+
+function getGenericCombo(role, hasShadows, isLowHp) {
+  const combos = {
+    Assassin:  hasShadows ? 'Escape shadow → Burst combo → Shadow swap out' : 'Flank from fog → Full skill combo → Escape',
+    Fighter:   'S1 (CC) → S2 → Ult → Basic attacks',
+    Mage:      'Position safely → Full skill rotation → Retreat',
+    Marksman:  'Keep max range → Basic attack + S1 poke → Ult if available',
+    Support:   'CC the target → Protect your carry',
+    Tank:      'Initiate with CC → Ult into the group → Absorb damage',
+  };
+  return combos[role] || 'Use skills in order · Prioritize surviving';
+}
+
+function getRoamAdvice(role, allies) {
+  if (allies === '3') return 'Full team nearby — group up and contest the next objective or fight.';
+  if (role === 'Assassin') return 'Check jungle camps. Look for isolated enemy in side-lane to assassinate.';
+  if (role === 'Marksman') return 'Farm your lane. Do not wander without vision — you are the priority kill target.';
+  if (role === 'Tank' || role === 'Support') return 'Roam to whichever lane needs help. Your presence creates pressure.';
+  if (role === 'Mage') return 'Clear your wave then rotate to mid for turtle control.';
+  return 'Find the next gold objective and set up vision with a ward.';
+}
+
+// ═══════════════════════════════════════════════════════
+// ADVICE CARD RENDERER
+// ═══════════════════════════════════════════════════════
+function renderAdviceCard(advice) {
+  const typeColor = {
+    retreat: 'var(--red)', attack: 'var(--orange)', farm: 'var(--green)',
+    shadow: 'var(--accent)', draft: 'var(--purple)', roam: 'var(--muted)'
+  };
+  const col = typeColor[advice.type] || 'var(--muted)';
+  const detail = (advice.detail || '').replace(/\n/g, '<br>');
+  return `
+    <div class="advice-card ${advice.type}">
+      <span class="advice-conf">${advice.confidence}%</span>
+      <p class="advice-action" style="color:${col}">${advice.emoji} ${advice.action}</p>
+      <p class="advice-detail">${detail}</p>
+      <div class="advice-combo">${advice.combo}</div>
+      ${advice.extra ? `<p style="margin:8px 0 0;font-size:11px;color:var(--muted)">${advice.extra}</p>` : ''}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+switchTab(state.tab || 'draft');
+</script>
+</body>
+</html>
