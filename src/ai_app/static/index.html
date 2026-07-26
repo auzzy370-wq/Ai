@@ -2,8 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover: extends content into the notch / Dynamic Island area
+      so we can use env(safe-area-inset-*) to push content back out.
+      interactive-widget=resizes-content: keeps the layout stable when the
+      iOS software keyboard appears (works in Safari 16+ / Chrome Android).
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <title>Ai Chat</title>
+
+    <!-- iOS home-screen / PWA experience -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ai Chat" />
+    <meta name="theme-color" content="#0f1115" />
+
     <style>
       :root {
         color-scheme: light dark;
@@ -17,26 +33,58 @@
         --assistant: #111827;
         --mock: #f59e0b;
         --live: #22c55e;
+
+        /* Safe-area insets from notch / home indicator (env() fallback = 0px) */
+        --sat: env(safe-area-inset-top, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
       }
 
       * {
         box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent; /* remove grey flash on tap (iOS) */
+      }
+
+      html,
+      body {
+        height: 100%;
       }
 
       body {
         margin: 0;
-        min-height: 100vh;
+        /*
+          Use 100dvh (Dynamic Viewport Height) so the layout shrinks correctly
+          when the iOS keyboard appears. Fallback to 100vh for older Safari.
+        */
+        min-height: 100dvh;
+        min-height: 100vh; /* fallback */
         font-family: Inter, system-ui, sans-serif;
+        /*
+          16px base — crucial: iOS Safari auto-zooms any input whose font-size
+          is < 16 px. Setting it on body means `font: inherit` on inputs gets
+          at least 16 px.
+        */
+        font-size: 16px;
         background: radial-gradient(circle at top, #1a2233, var(--bg) 45%);
         color: var(--text);
         display: grid;
         place-items: center;
+
+        /* Desktop: give breathing room. Mobile: zero padding — app fills screen. */
         padding: 24px;
+        padding-left: max(24px, var(--sal));
+        padding-right: max(24px, var(--sar));
       }
 
       .app {
         width: min(720px, 100%);
-        height: min(80vh, 760px);
+        /*
+          dvh fallback chain: dvh (modern) → vh (old).
+          On desktop we cap at 760 px. On mobile we fill the full height.
+        */
+        height: min(80dvh, 760px);
+        height: min(80vh, 760px); /* fallback */
         background: color-mix(in srgb, var(--panel) 92%, transparent);
         border: 1px solid var(--border);
         border-radius: 20px;
@@ -46,8 +94,39 @@
         box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
       }
 
+      /* ------------------------------------------------------------------ */
+      /* Mobile overrides (≤ 640 px — covers every iPhone in portrait)       */
+      /* ------------------------------------------------------------------ */
+      @media (max-width: 640px) {
+        body {
+          /* No body padding; the app fills the entire screen edge-to-edge. */
+          padding: 0;
+          align-items: stretch;
+        }
+
+        .app {
+          width: 100%;
+          /*
+            Fill the full dynamic viewport so the form stays above the keyboard.
+            dvh accounts for the keyboard on iOS 16+ / Chrome Android.
+          */
+          height: 100dvh;
+          height: 100vh; /* fallback */
+          border-radius: 0;
+          border: none;
+          box-shadow: none;
+        }
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Header                                                               */
+      /* ------------------------------------------------------------------ */
       header {
         padding: 20px 24px;
+        /* Push content below the notch / Dynamic Island on full-screen mobile */
+        padding-top: max(20px, calc(var(--sat) + 12px));
+        padding-left: max(24px, var(--sal));
+        padding-right: max(24px, var(--sar));
         border-bottom: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
@@ -57,13 +136,20 @@
 
       header h1 {
         margin: 0;
-        font-size: 1.25rem;
+        font-size: 1.125rem; /* slightly smaller on mobile to leave room for pill */
       }
 
       header p {
-        margin: 6px 0 0;
+        margin: 4px 0 0;
         color: var(--muted);
-        font-size: 0.9rem;
+        font-size: 0.85rem;
+        /* Hide subtitle on very small screens to save vertical space */
+      }
+
+      @media (max-width: 380px) {
+        header p {
+          display: none;
+        }
       }
 
       .status-pill {
@@ -73,6 +159,10 @@
         border-radius: 999px;
         border: 1px solid var(--border);
         white-space: nowrap;
+        /* Minimum touch target height */
+        min-height: 36px;
+        display: flex;
+        align-items: center;
       }
 
       .status-pill.mock {
@@ -83,11 +173,16 @@
         color: var(--live);
       }
 
+      /* ------------------------------------------------------------------ */
+      /* Toolbar                                                              */
+      /* ------------------------------------------------------------------ */
       .toolbar {
         display: flex;
         justify-content: flex-end;
         gap: 8px;
         padding: 10px 20px 0;
+        padding-left: max(20px, var(--sal));
+        padding-right: max(20px, var(--sar));
       }
 
       .toolbar button {
@@ -95,16 +190,33 @@
         background: transparent;
         color: var(--muted);
         border-radius: 10px;
-        padding: 6px 12px;
+        padding: 8px 14px;
         cursor: pointer;
         font: inherit;
         font-size: 0.85rem;
+        /* Apple HIG minimum touch target: 44 × 44 pt */
+        min-height: 44px;
+        min-width: 44px;
+        transition: color 0.15s, border-color 0.15s;
       }
 
+      .toolbar button:active {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Message list                                                         */
+      /* ------------------------------------------------------------------ */
       #messages {
         flex: 1;
         overflow-y: auto;
+        /* Momentum scrolling on iOS */
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
         padding: 12px 24px 20px;
+        padding-left: max(24px, var(--sal));
+        padding-right: max(24px, var(--sar));
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -117,6 +229,8 @@
         line-height: 1.5;
         white-space: pre-wrap;
         word-break: break-word;
+        /* Prevent text from being too small on mobile */
+        font-size: 0.95rem;
       }
 
       .message.user {
@@ -134,20 +248,32 @@
       .message .meta {
         display: block;
         margin-top: 8px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         color: var(--muted);
       }
 
+      /* ------------------------------------------------------------------ */
+      /* Input form                                                           */
+      /* ------------------------------------------------------------------ */
       form {
         display: flex;
-        gap: 12px;
-        padding: 16px 20px 20px;
+        gap: 10px;
+        padding: 12px 20px 16px;
+        padding-left: max(20px, var(--sal));
+        padding-right: max(20px, var(--sar));
+        /*
+          Pad above the home indicator bar on iPhone X+ so the form isn't
+          covered by the swipe gesture area.
+        */
+        padding-bottom: max(16px, calc(var(--sab) + 8px));
         border-top: 1px solid var(--border);
       }
 
       input,
       button {
         font: inherit;
+        /* Inherit the 16px body font to prevent iOS auto-zoom */
+        font-size: 1rem;
       }
 
       input {
@@ -157,6 +283,13 @@
         color: var(--text);
         border-radius: 12px;
         padding: 12px 14px;
+        /* 16 px minimum — iOS Safari zooms in on inputs < 16 px */
+        font-size: max(1rem, 16px);
+        /* Smooth appearance on iOS */
+        -webkit-appearance: none;
+        appearance: none;
+        /* Minimum tap height */
+        min-height: 44px;
       }
 
       input:focus {
@@ -172,11 +305,32 @@
         padding: 0 18px;
         cursor: pointer;
         font-weight: 600;
+        /* Minimum tap target */
+        min-height: 44px;
+        min-width: 44px;
+        white-space: nowrap;
+        transition: opacity 0.15s;
+        /* Show a send arrow on very narrow screens */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      button[type="submit"]:active:not(:disabled) {
+        opacity: 0.8;
       }
 
       button:disabled {
-        opacity: 0.6;
+        opacity: 0.5;
         cursor: not-allowed;
+      }
+
+      /* On small phones show only the arrow icon to save horizontal space */
+      @media (max-width: 390px) {
+        .send-label {
+          display: none;
+        }
       }
     </style>
   </head>
@@ -187,22 +341,48 @@
           <h1>Ai Chat</h1>
           <p>Multi-turn chat with conversation history.</p>
         </div>
-        <span id="status-pill" class="status-pill mock">loading...</span>
+        <span id="status-pill" class="status-pill mock">loading…</span>
       </header>
       <div class="toolbar">
-        <button type="button" id="export-button">Export JSON</button>
-        <button type="button" id="clear-button">Clear chat</button>
+        <button type="button" id="export-button">Export</button>
+        <button type="button" id="clear-button">Clear</button>
       </div>
-      <div id="messages" aria-live="polite"></div>
+      <div id="messages" aria-live="polite" role="log"></div>
       <form id="chat-form">
         <input
           id="message-input"
           type="text"
-          placeholder="Type a message..."
+          placeholder="Type a message…"
           autocomplete="off"
+          autocorrect="on"
+          autocapitalize="sentences"
+          spellcheck="true"
+          inputmode="text"
+          enterkeyhint="send"
           required
         />
-        <button type="submit" id="send-button">Send</button>
+        <!--
+          enterkeyhint="send" makes the iOS keyboard show a "send" action key
+          instead of "return", so users know tapping it submits the form.
+        -->
+        <button type="submit" id="send-button" aria-label="Send message">
+          <span class="send-label">Send</span>
+          <!-- Arrow icon shown when "Send" label is hidden on very small screens -->
+          <svg
+            aria-hidden="true"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        </button>
       </form>
     </main>
     <script>
@@ -253,7 +433,8 @@
           el.appendChild(metaEl);
         }
         messagesEl.appendChild(el);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        // Use scrollIntoView on iOS for smoother scroll when keyboard is open
+        el.scrollIntoView({ block: "end", behavior: "smooth" });
       }
 
       async function loadStatus() {
@@ -293,7 +474,7 @@
         const el = document.createElement("div");
         el.className = "message assistant";
         messagesEl.appendChild(el);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        el.scrollIntoView({ block: "end", behavior: "smooth" });
         return el;
       }
 
@@ -331,7 +512,7 @@
             if (data.token) {
               fullText += data.token;
               assistantEl.textContent = fullText;
-              messagesEl.scrollTop = messagesEl.scrollHeight;
+              assistantEl.scrollIntoView({ block: "end", behavior: "smooth" });
             }
             if (data.done) {
               model = data.model;
@@ -353,6 +534,10 @@
         renderHistory();
         input.value = "";
         sendButton.disabled = true;
+
+        // On iOS, blur the input to dismiss the keyboard so the response is visible
+        // without the keyboard blocking it while streaming.
+        input.blur();
 
         try {
           const data = await streamChat(message, requestHistory);
@@ -376,7 +561,8 @@
           renderHistory();
         } finally {
           sendButton.disabled = false;
-          input.focus();
+          // Restore focus to input after response (doesn't re-open keyboard on iOS)
+          input.focus({ preventScroll: true });
         }
       });
 
