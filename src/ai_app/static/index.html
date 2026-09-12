@@ -3,386 +3,956 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ai Chat</title>
+    <title>FORNO — Wood-Fired Pizza</title>
+    <meta
+      name="description"
+      content="FORNO serves wood-fired pizza from a neighborhood oven. Order Margherita, Diavola, and seasonal pies."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #0f1115;
-        --panel: #171a21;
-        --border: #2a2f3a;
-        --text: #e8ecf1;
-        --muted: #9aa4b2;
-        --accent: #5b8cff;
-        --user: #1f2937;
-        --assistant: #111827;
-        --mock: #f59e0b;
-        --live: #22c55e;
+        --ink: #1a211c;
+        --paper: #f2f6f3;
+        --mist: #dfe8e2;
+        --basil: #1f4d3a;
+        --basil-deep: #143528;
+        --tomato: #c23b22;
+        --dough: #c9a66b;
+        --muted: #5c6b62;
+        --white: #ffffff;
+        --shadow: 0 18px 50px rgba(26, 33, 28, 0.14);
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
-        min-height: 100vh;
-        font-family: Inter, system-ui, sans-serif;
-        background: radial-gradient(circle at top, #1a2233, var(--bg) 45%);
-        color: var(--text);
-        display: grid;
-        place-items: center;
-        padding: 24px;
-      }
-
-      .app {
-        width: min(720px, 100%);
-        height: min(80vh, 760px);
-        background: color-mix(in srgb, var(--panel) 92%, transparent);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
-      }
-
-      header {
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        align-items: flex-start;
-      }
-
-      header h1 {
-        margin: 0;
-        font-size: 1.25rem;
-      }
-
-      header p {
-        margin: 6px 0 0;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
-
-      .status-pill {
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 6px 10px;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        white-space: nowrap;
-      }
-
-      .status-pill.mock {
-        color: var(--mock);
-      }
-
-      .status-pill.openai {
-        color: var(--live);
-      }
-
-      .toolbar {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        padding: 10px 20px 0;
-      }
-
-      .toolbar button {
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--muted);
-        border-radius: 10px;
-        padding: 6px 12px;
-        cursor: pointer;
-        font: inherit;
-        font-size: 0.85rem;
-      }
-
-      #messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 12px 24px 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .message {
-        max-width: 85%;
-        padding: 12px 14px;
-        border-radius: 14px;
+        font-family: Manrope, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(ellipse 80% 50% at 10% 0%, #e8f0ea 0%, transparent 55%),
+          radial-gradient(ellipse 60% 40% at 100% 20%, #f3e8d8 0%, transparent 50%),
+          linear-gradient(180deg, var(--paper), #e9efe9 40%, var(--paper) 100%);
         line-height: 1.5;
-        white-space: pre-wrap;
-        word-break: break-word;
       }
 
-      .message.user {
-        align-self: flex-end;
-        background: var(--user);
-        border: 1px solid var(--border);
-      }
-
-      .message.assistant {
-        align-self: flex-start;
-        background: var(--assistant);
-        border: 1px solid var(--border);
-      }
-
-      .message .meta {
+      img {
+        max-width: 100%;
         display: block;
-        margin-top: 8px;
-        font-size: 0.75rem;
-        color: var(--muted);
       }
 
-      form {
-        display: flex;
-        gap: 12px;
-        padding: 16px 20px 20px;
-        border-top: 1px solid var(--border);
+      a {
+        color: inherit;
+        text-decoration: none;
       }
 
-      input,
       button {
         font: inherit;
-      }
-
-      input {
-        flex: 1;
-        border: 1px solid var(--border);
-        background: #0b0d12;
-        color: var(--text);
-        border-radius: 12px;
-        padding: 12px 14px;
-      }
-
-      input:focus {
-        outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
-        border-color: var(--accent);
-      }
-
-      button[type="submit"] {
-        border: none;
-        background: var(--accent);
-        color: white;
-        border-radius: 12px;
-        padding: 0 18px;
         cursor: pointer;
-        font-weight: 600;
+        border: 0;
+        background: none;
       }
 
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
+      .wrap {
+        width: min(1120px, calc(100% - 2.5rem));
+        margin-inline: auto;
+      }
+
+      /* Nav */
+      .nav {
+        position: absolute;
+        inset: 0 0 auto;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 0;
+        color: var(--white);
+      }
+
+      .nav-brand {
+        font-family: Syne, sans-serif;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        font-size: 0.95rem;
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 1.5rem;
+        align-items: center;
+        font-size: 0.92rem;
+        font-weight: 500;
+      }
+
+      .nav-links a {
+        opacity: 0.9;
+      }
+
+      .nav-links a:hover {
+        opacity: 1;
+      }
+
+      .cart-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.9rem;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: var(--white);
+        transition: background 0.25s var(--ease), border-color 0.25s var(--ease);
+      }
+
+      .cart-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.55);
+      }
+
+      .cart-count {
+        min-width: 1.25rem;
+        height: 1.25rem;
+        display: inline-grid;
+        place-items: center;
+        background: var(--tomato);
+        color: var(--white);
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+
+      /* Hero — one composition, brand-first, full-bleed image */
+      .hero {
+        position: relative;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: grid;
+        align-items: end;
+        overflow: hidden;
+        color: var(--white);
+      }
+
+      .hero-media {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+
+      .hero-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 40%;
+        transform: scale(1.08);
+        animation: hero-zoom 18s var(--ease) forwards;
+      }
+
+      .hero-media::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgba(20, 53, 40, 0.35) 0%, rgba(20, 53, 40, 0.15) 35%, rgba(20, 53, 40, 0.72) 100%),
+          linear-gradient(90deg, rgba(20, 53, 40, 0.45) 0%, transparent 55%);
+      }
+
+      .hero-content {
+        position: relative;
+        z-index: 1;
+        padding: 0 0 4.5rem;
+        max-width: 38rem;
+      }
+
+      .brand {
+        margin: 0 0 0.75rem;
+        font-family: Syne, sans-serif;
+        font-weight: 800;
+        font-size: clamp(4.5rem, 14vw, 8.5rem);
+        line-height: 0.9;
+        letter-spacing: -0.03em;
+        opacity: 0;
+        transform: translateY(28px);
+        animation: rise 0.9s var(--ease) 0.15s forwards;
+      }
+
+      .hero h2 {
+        margin: 0 0 0.85rem;
+        font-family: Syne, sans-serif;
+        font-weight: 700;
+        font-size: clamp(1.45rem, 3.2vw, 2rem);
+        line-height: 1.15;
+        opacity: 0;
+        transform: translateY(24px);
+        animation: rise 0.9s var(--ease) 0.32s forwards;
+      }
+
+      .hero p {
+        margin: 0 0 1.75rem;
+        max-width: 28rem;
+        font-size: 1.05rem;
+        color: rgba(255, 255, 255, 0.88);
+        opacity: 0;
+        transform: translateY(24px);
+        animation: rise 0.9s var(--ease) 0.45s forwards;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        opacity: 0;
+        transform: translateY(24px);
+        animation: rise 0.9s var(--ease) 0.58s forwards;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 3rem;
+        padding: 0.75rem 1.35rem;
+        font-weight: 700;
+        font-size: 0.95rem;
+        letter-spacing: 0.01em;
+        transition: transform 0.25s var(--ease), background 0.25s var(--ease), color 0.25s var(--ease), border-color 0.25s var(--ease);
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .btn-primary {
+        background: var(--tomato);
+        color: var(--white);
+      }
+
+      .btn-primary:hover {
+        background: #a8321c;
+      }
+
+      .btn-ghost {
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        color: var(--white);
+      }
+
+      .btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: var(--white);
+      }
+
+      .btn-ink {
+        background: var(--basil);
+        color: var(--white);
+      }
+
+      .btn-ink:hover {
+        background: var(--basil-deep);
+      }
+
+      .btn-outline {
+        border: 1px solid var(--basil);
+        color: var(--basil);
+      }
+
+      .btn-outline:hover {
+        background: var(--basil);
+        color: var(--white);
+      }
+
+      /* Sections */
+      section {
+        padding: 5.5rem 0;
+      }
+
+      .section-head {
+        max-width: 36rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .section-head h2 {
+        margin: 0 0 0.65rem;
+        font-family: Syne, sans-serif;
+        font-size: clamp(2rem, 4vw, 2.75rem);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      /* Menu — interactive rows, not card grid */
+      .menu-list {
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid rgba(31, 77, 58, 0.18);
+      }
+
+      .menu-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem 1.5rem;
+        align-items: center;
+        padding: 1.35rem 0;
+        border-bottom: 1px solid rgba(31, 77, 58, 0.18);
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+      }
+
+      .menu-item.visible {
+        opacity: 1;
+        transform: none;
+      }
+
+      .menu-item h3 {
+        margin: 0 0 0.25rem;
+        font-family: Syne, sans-serif;
+        font-size: 1.35rem;
+        letter-spacing: -0.01em;
+      }
+
+      .menu-item p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .menu-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .price {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        min-width: 3.5rem;
+        text-align: right;
+      }
+
+      .add-btn {
+        min-width: 5.5rem;
+        min-height: 2.5rem;
+        padding: 0.45rem 0.9rem;
+        background: var(--basil);
+        color: var(--white);
+        font-weight: 650;
+        font-size: 0.88rem;
+        transition: background 0.2s var(--ease), transform 0.2s var(--ease);
+      }
+
+      .add-btn:hover {
+        background: var(--basil-deep);
+        transform: translateY(-1px);
+      }
+
+      .add-btn.added {
+        background: var(--tomato);
+      }
+
+      /* Story */
+      .story {
+        background:
+          linear-gradient(135deg, rgba(31, 77, 58, 0.08), transparent 40%),
+          linear-gradient(var(--mist), #d5e1d9);
+      }
+
+      .story-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 3rem;
+        align-items: center;
+      }
+
+      .story-copy h2 {
+        margin: 0 0 1rem;
+        font-family: Syne, sans-serif;
+        font-size: clamp(2rem, 4vw, 2.75rem);
+        line-height: 1.1;
+      }
+
+      .story-copy p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.08rem;
+        max-width: 34rem;
+      }
+
+      .story-visual {
+        position: relative;
+        min-height: 320px;
+        overflow: hidden;
+      }
+
+      .story-visual img {
+        width: 100%;
+        height: 100%;
+        min-height: 320px;
+        object-fit: cover;
+        filter: saturate(1.05);
+      }
+
+      .story-visual::before {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 35%;
+        z-index: 1;
+        background: linear-gradient(transparent, rgba(20, 53, 40, 0.55));
+        pointer-events: none;
+      }
+
+      /* Visit */
+      .visit-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2.5rem 4rem;
+      }
+
+      .visit-block h3 {
+        margin: 0 0 0.75rem;
+        font-family: Syne, sans-serif;
+        font-size: 1.35rem;
+      }
+
+      .visit-block p,
+      .visit-block li {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .visit-block ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .visit-block li {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid rgba(31, 77, 58, 0.12);
+      }
+
+      .visit-block li span:last-child {
+        color: var(--ink);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Footer */
+      .footer {
+        padding: 3rem 0 2.5rem;
+        border-top: 1px solid rgba(31, 77, 58, 0.15);
+      }
+
+      .footer-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 1.5rem;
+        align-items: center;
+      }
+
+      .footer-brand {
+        font-family: Syne, sans-serif;
+        font-weight: 800;
+        font-size: 1.75rem;
+        letter-spacing: -0.02em;
+      }
+
+      .footer p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      /* Cart drawer */
+      .drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 53, 40, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s var(--ease);
+        z-index: 40;
+      }
+
+      .drawer-backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(400px, 100%);
+        height: 100%;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+        transform: translateX(100%);
+        transition: transform 0.4s var(--ease);
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        padding: 1.5rem;
+      }
+
+      .drawer.open {
+        transform: none;
+      }
+
+      .drawer header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.25rem;
+      }
+
+      .drawer h2 {
+        margin: 0;
+        font-family: Syne, sans-serif;
+        font-size: 1.5rem;
+      }
+
+      .drawer-close {
+        width: 2.25rem;
+        height: 2.25rem;
+        border: 1px solid rgba(31, 77, 58, 0.25);
+        font-size: 1.25rem;
+        line-height: 1;
+      }
+
+      .cart-lines {
+        flex: 1;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+      }
+
+      .cart-empty {
+        color: var(--muted);
+        margin: 2rem 0;
+      }
+
+      .cart-line {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.35rem 1rem;
+        padding-bottom: 0.85rem;
+        border-bottom: 1px solid rgba(31, 77, 58, 0.12);
+      }
+
+      .cart-line strong {
+        font-family: Syne, sans-serif;
+      }
+
+      .cart-line .qty {
+        color: var(--muted);
+        font-size: 0.9rem;
+        grid-column: 1;
+      }
+
+      .cart-footer {
+        border-top: 1px solid rgba(31, 77, 58, 0.15);
+        padding-top: 1rem;
+        display: grid;
+        gap: 0.85rem;
+      }
+
+      .cart-total {
+        display: flex;
+        justify-content: space-between;
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 1.5rem;
+        transform: translate(-50%, 20px);
+        background: var(--basil-deep);
+        color: var(--white);
+        padding: 0.75rem 1.15rem;
+        font-weight: 600;
+        font-size: 0.92rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+        z-index: 60;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      @keyframes rise {
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @keyframes hero-zoom {
+        to {
+          transform: scale(1);
+        }
+      }
+
+      @media (max-width: 800px) {
+        .wrap {
+          width: min(1120px, calc(100% - 1.5rem));
+        }
+
+        .nav-links a:not(.cart-btn) {
+          display: none;
+        }
+
+        .hero-content {
+          padding-bottom: 3rem;
+        }
+
+        .story-grid,
+        .visit-grid {
+          grid-template-columns: 1fr;
+          gap: 1.75rem;
+        }
+
+        .menu-item {
+          grid-template-columns: 1fr;
+        }
+
+        .menu-meta {
+          justify-content: space-between;
+        }
       }
     </style>
   </head>
   <body>
-    <main class="app">
-      <header>
-        <div>
-          <h1>Ai Chat</h1>
-          <p>Multi-turn chat with conversation history.</p>
-        </div>
-        <span id="status-pill" class="status-pill mock">loading...</span>
-      </header>
-      <div class="toolbar">
-        <button type="button" id="export-button">Export JSON</button>
-        <button type="button" id="clear-button">Clear chat</button>
-      </div>
-      <div id="messages" aria-live="polite"></div>
-      <form id="chat-form">
-        <input
-          id="message-input"
-          type="text"
-          placeholder="Type a message..."
-          autocomplete="off"
-          required
+    <header class="hero" id="top">
+      <div class="hero-media" aria-hidden="true">
+        <img
+          src="https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=2000&q=80"
+          alt=""
+          width="2000"
+          height="1333"
         />
-        <button type="submit" id="send-button">Send</button>
-      </form>
+      </div>
+      <div class="wrap" style="position: relative; z-index: 2; align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; min-height: 100vh; min-height: 100dvh;">
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-brand" href="#top">FORNO</a>
+          <div class="nav-links">
+            <a href="#menu">Menu</a>
+            <a href="#oven">The oven</a>
+            <a href="#visit">Visit</a>
+            <button class="cart-btn" type="button" id="open-cart" aria-label="Open cart">
+              Order
+              <span class="cart-count" id="cart-count">0</span>
+            </button>
+          </div>
+        </nav>
+        <div class="hero-content">
+          <p class="brand">FORNO</p>
+          <h2>Wood-fired pizza, pulled from the flame.</h2>
+          <p>Thin crust, blistered edges, and toppings that taste like they belong on a Naples night.</p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#menu">See the menu</a>
+            <button class="btn btn-ghost" type="button" id="hero-order">Start an order</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="menu">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>The menu</h2>
+            <p>Six pies from the oven. Add what you want — we keep it simple.</p>
+          </div>
+          <div class="menu-list" id="menu-list"></div>
+        </div>
+      </section>
+
+      <section class="story" id="oven">
+        <div class="wrap story-grid">
+          <div class="story-copy">
+            <h2>One oven. One job.</h2>
+            <p>
+              FORNO is built around a wood-burning hearth that hits 900°F. Dough rests for two days.
+              Sauce is San Marzano, crushed by hand. We fire each pie for ninety seconds — no conveyor,
+              no shortcuts.
+            </p>
+          </div>
+          <div class="story-visual">
+            <img
+              src="https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=1200&q=80"
+              alt="Fresh pizza coming out of a wood-fired oven"
+              width="1200"
+              height="800"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section id="visit">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Come by</h2>
+            <p>Walk in for a slice, or order ahead and pick up hot from the peel.</p>
+          </div>
+          <div class="visit-grid">
+            <div class="visit-block">
+              <h3>Location</h3>
+              <p>418 Oven Street<br />Brooklyn, NY 11215</p>
+              <p style="margin-top: 0.75rem">(718) 555-0142</p>
+            </div>
+            <div class="visit-block">
+              <h3>Hours</h3>
+              <ul>
+                <li><span>Mon – Thu</span><span>11:30 – 10:00</span></li>
+                <li><span>Fri – Sat</span><span>11:30 – 11:00</span></li>
+                <li><span>Sunday</span><span>12:00 – 9:00</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <footer class="footer">
+      <div class="wrap footer-row">
+        <div>
+          <div class="footer-brand">FORNO</div>
+          <p>Wood-fired pizza · Neighborhood oven</p>
+        </div>
+        <a class="btn btn-ink" href="#menu">Order pizza</a>
+      </div>
+    </footer>
+
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Your order">
+      <header>
+        <h2>Your order</h2>
+        <button class="drawer-close" type="button" id="close-cart" aria-label="Close cart">×</button>
+      </header>
+      <div class="cart-lines" id="cart-lines">
+        <p class="cart-empty">Your peel is empty. Add a pie from the menu.</p>
+      </div>
+      <div class="cart-footer">
+        <div class="cart-total">
+          <span>Total</span>
+          <span id="cart-total">$0</span>
+        </div>
+        <button class="btn btn-primary" type="button" id="checkout">Place pickup order</button>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
     <script>
-      const STORAGE_KEY = "ai-chat-history";
-      const messagesEl = document.getElementById("messages");
-      const form = document.getElementById("chat-form");
-      const input = document.getElementById("message-input");
-      const sendButton = document.getElementById("send-button");
-      const clearButton = document.getElementById("clear-button");
-      const exportButton = document.getElementById("export-button");
-      const statusPill = document.getElementById("status-pill");
+      const MENU = [
+        {
+          id: "margherita",
+          name: "Margherita",
+          description: "San Marzano, fior di latte, basil, olive oil",
+          price: 16,
+        },
+        {
+          id: "diavola",
+          name: "Diavola",
+          description: "Spicy salami, chili honey, mozzarella, oregano",
+          price: 19,
+        },
+        {
+          id: "funghi",
+          name: "Funghi",
+          description: "Roasted mushrooms, garlic confit, thyme, pecorino",
+          price: 18,
+        },
+        {
+          id: "salsiccia",
+          name: "Salsiccia",
+          description: "Fennel sausage, caramelized onion, smoked mozzarella",
+          price: 20,
+        },
+        {
+          id: "verde",
+          name: "Verde",
+          description: "Pesto, zucchini, lemon zest, stracciatella",
+          price: 18,
+        },
+        {
+          id: "marinara",
+          name: "Marinara",
+          description: "Tomato, garlic, oregano, olive oil — no cheese",
+          price: 14,
+        },
+      ];
 
-      let history = [];
+      const cart = new Map();
+      const menuList = document.getElementById("menu-list");
+      const cartCount = document.getElementById("cart-count");
+      const cartLines = document.getElementById("cart-lines");
+      const cartTotal = document.getElementById("cart-total");
+      const drawer = document.getElementById("drawer");
+      const backdrop = document.getElementById("drawer-backdrop");
+      const toast = document.getElementById("toast");
 
-      function saveHistory() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+      function money(n) {
+        return `$${n.toFixed(0)}`;
       }
 
-      function loadHistory() {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          return saved ? JSON.parse(saved) : [];
-        } catch {
-          return [];
-        }
+      function renderMenu() {
+        menuList.innerHTML = MENU.map(
+          (item, index) => `
+          <article class="menu-item" style="transition-delay: ${index * 70}ms" data-id="${item.id}">
+            <div>
+              <h3>${item.name}</h3>
+              <p>${item.description}</p>
+            </div>
+            <div class="menu-meta">
+              <span class="price">${money(item.price)}</span>
+              <button class="add-btn" type="button" data-add="${item.id}">Add</button>
+            </div>
+          </article>`
+        ).join("");
       }
 
-      function renderHistory() {
-        messagesEl.innerHTML = "";
-        if (history.length === 0) {
-          addMessage("assistant", "Hi! Send a message to try multi-turn chat.");
+      function cartQty() {
+        let total = 0;
+        cart.forEach((qty) => {
+          total += qty;
+        });
+        return total;
+      }
+
+      function cartSum() {
+        let total = 0;
+        cart.forEach((qty, id) => {
+          const item = MENU.find((m) => m.id === id);
+          total += item.price * qty;
+        });
+        return total;
+      }
+
+      function renderCart() {
+        cartCount.textContent = String(cartQty());
+        cartTotal.textContent = money(cartSum());
+
+        if (cart.size === 0) {
+          cartLines.innerHTML = `<p class="cart-empty">Your peel is empty. Add a pie from the menu.</p>`;
           return;
         }
 
-        for (const item of history) {
-          addMessage(item.role, item.content, item.meta || "");
-        }
+        cartLines.innerHTML = [...cart.entries()]
+          .map(([id, qty]) => {
+            const item = MENU.find((m) => m.id === id);
+            return `
+              <div class="cart-line">
+                <strong>${item.name}</strong>
+                <span>${money(item.price * qty)}</span>
+                <span class="qty">${qty} × ${money(item.price)}</span>
+              </div>`;
+          })
+          .join("");
       }
 
-      function addMessage(role, text, meta = "") {
-        const el = document.createElement("div");
-        el.className = `message ${role}`;
-        el.textContent = text;
-        if (meta) {
-          const metaEl = document.createElement("span");
-          metaEl.className = "meta";
-          metaEl.textContent = meta;
-          el.appendChild(metaEl);
-        }
-        messagesEl.appendChild(el);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+      function addToCart(id) {
+        cart.set(id, (cart.get(id) || 0) + 1);
+        renderCart();
+        const item = MENU.find((m) => m.id === id);
+        showToast(`${item.name} added to your order`);
       }
 
-      async function loadStatus() {
-        try {
-          const response = await fetch("/api/status");
-          const data = await response.json();
-          const forced = data.mock_forced ? " (forced)" : "";
-          statusPill.textContent = `${data.mode}${forced} · ${data.model}`;
-          statusPill.className = `status-pill ${data.mode}`;
-          statusPill.title = data.reason || "";
-        } catch {
-          statusPill.textContent = "offline";
-          statusPill.className = "status-pill mock";
-        }
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => toast.classList.remove("show"), 1800);
       }
 
-      exportButton.addEventListener("click", () => {
-        const blob = new Blob([JSON.stringify(history, null, 2)], {
-          type: "application/json",
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `ai-chat-${new Date().toISOString().slice(0, 19)}.json`;
-        link.click();
-        URL.revokeObjectURL(url);
+      function openCart() {
+        drawer.classList.add("open");
+        backdrop.classList.add("open");
+        backdrop.hidden = false;
+        drawer.setAttribute("aria-hidden", "false");
+      }
+
+      function closeCart() {
+        drawer.classList.remove("open");
+        backdrop.classList.remove("open");
+        drawer.setAttribute("aria-hidden", "true");
+        setTimeout(() => {
+          if (!drawer.classList.contains("open")) backdrop.hidden = true;
+        }, 300);
+      }
+
+      renderMenu();
+      renderCart();
+
+      menuList.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-add]");
+        if (!btn) return;
+        const id = btn.getAttribute("data-add");
+        addToCart(id);
+        btn.classList.add("added");
+        btn.textContent = "Added";
+        setTimeout(() => {
+          btn.classList.remove("added");
+          btn.textContent = "Add";
+        }, 900);
       });
 
-      clearButton.addEventListener("click", () => {
-        history = [];
-        saveHistory();
-        renderHistory();
-        input.focus();
+      document.getElementById("open-cart").addEventListener("click", openCart);
+      document.getElementById("hero-order").addEventListener("click", () => {
+        document.getElementById("menu").scrollIntoView({ behavior: "smooth" });
+      });
+      document.getElementById("close-cart").addEventListener("click", closeCart);
+      backdrop.addEventListener("click", closeCart);
+
+      document.getElementById("checkout").addEventListener("click", () => {
+        if (cart.size === 0) {
+          showToast("Add a pie before placing an order");
+          return;
+        }
+        showToast("Pickup order placed — see you at the oven");
+        cart.clear();
+        renderCart();
+        closeCart();
       });
 
-      function createAssistantMessage() {
-        const el = document.createElement("div");
-        el.className = "message assistant";
-        messagesEl.appendChild(el);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-        return el;
-      }
-
-      async function streamChat(message, requestHistory) {
-        const response = await fetch("/api/chat/stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history: requestHistory }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
-
-        const assistantEl = createAssistantMessage();
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let fullText = "";
-        let model = "mock";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() || "";
-
-          for (const part of parts) {
-            const line = part.trim();
-            if (!line.startsWith("data: ")) continue;
-
-            const data = JSON.parse(line.slice(6));
-            if (data.token) {
-              fullText += data.token;
-              assistantEl.textContent = fullText;
-              messagesEl.scrollTop = messagesEl.scrollHeight;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("visible");
+              observer.unobserve(entry.target);
             }
-            if (data.done) {
-              model = data.model;
-            }
-          }
-        }
-
-        return { reply: fullText.trim(), model };
-      }
-
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const message = input.value.trim();
-        if (!message) return;
-
-        const requestHistory = history.map(({ role, content }) => ({ role, content }));
-        history.push({ role: "user", content: message });
-        saveHistory();
-        renderHistory();
-        input.value = "";
-        sendButton.disabled = true;
-
-        try {
-          const data = await streamChat(message, requestHistory);
-          const metaEl = document.createElement("span");
-          metaEl.className = "meta";
-          metaEl.textContent = `model: ${data.model}`;
-          const lastAssistant = messagesEl.querySelector(".message.assistant:last-child");
-          if (lastAssistant) {
-            lastAssistant.appendChild(metaEl);
-          }
-
-          history.push({
-            role: "assistant",
-            content: data.reply,
-            meta: `model: ${data.model}`,
           });
-          saveHistory();
-        } catch (error) {
-          history.push({ role: "assistant", content: `Error: ${error.message}` });
-          saveHistory();
-          renderHistory();
-        } finally {
-          sendButton.disabled = false;
-          input.focus();
-        }
-      });
+        },
+        { threshold: 0.2 }
+      );
 
-      history = loadHistory();
-      renderHistory();
-      loadStatus();
+      document.querySelectorAll(".menu-item").forEach((el) => observer.observe(el));
     </script>
   </body>
 </html>
