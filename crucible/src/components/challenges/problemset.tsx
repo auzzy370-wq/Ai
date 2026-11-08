@@ -416,18 +416,13 @@ export function Problemset(props: {
           <p className="mt-2 max-w-2xl text-xs text-slate-500" title={FREQUENCY_METHODOLOGY.detail}>
             Freq: {FREQUENCY_METHODOLOGY.label}. Acc: live when ≥3 hidden submits, otherwise{" "}
             {ACCEPTANCE_METHODOLOGY.short}.
-            {props.libraryAllTotals &&
+            {props.signedIn &&
+              props.libraryAllTotals &&
               props.libraryAllTotals.coding + props.libraryAllTotals.projects >
                 (props.libraryTotals?.coding ?? 0) + (props.libraryTotals?.projects ?? 0) && (
                 <>
                   {" "}
-                  Procedural practice bank also available:{" "}
-                  {(
-                    props.libraryAllTotals.coding +
-                    props.libraryAllTotals.projects -
-                    ((props.libraryTotals?.coding ?? 0) + (props.libraryTotals?.projects ?? 0))
-                  ).toLocaleString()}{" "}
-                  generated variants.
+                  Extra practice volume available after you opt in below.
                 </>
               )}
           </p>

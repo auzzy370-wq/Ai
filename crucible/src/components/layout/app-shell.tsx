@@ -203,15 +203,11 @@ function NavLinks({
       ))}
       {guest && (
         <div className="mx-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3">
-          <p className="text-xs font-medium text-slate-800">Mocks, jobs &amp; compete</p>
+          <p className="text-xs font-medium text-slate-800">Save your progress</p>
           <p className="mt-1 text-[11px] leading-snug text-slate-500">
-            Sign in to unlock timed mocks, career links, AI vs Human, and leaderboards.
+            Create a free account to keep XP, streaks, and problem attempts.
           </p>
-          <button
-            type="button"
-            onClick={() => onRequireSignIn?.()}
-            className="mt-2 text-xs font-medium text-orange-700 hover:underline"
-          >
+          <button type="button" className="mt-2 text-xs font-medium text-orange-700 hover:underline" onClick={() => onRequireSignIn?.()}>
             Sign in →
           </button>
         </div>
@@ -314,12 +310,18 @@ export function AppShell({
           { href: "/reviews", label: "Review", icon: ScrollText },
           { href: "/candidates", label: "People", icon: Users },
         ] as const)
-    : ([
-        { href: "/learn", label: "Learn", icon: BookOpen },
-        { href: "/challenges", label: "Practice", icon: Boxes },
-        { href: "/interview", label: "Mocks", icon: Timer },
-        { href: "/jobs", label: "Jobs", icon: Briefcase },
-      ] as const);
+    : isGuest
+      ? ([
+          { href: "/learn", label: "Learn", icon: BookOpen },
+          { href: "/challenges", label: "Practice", icon: Boxes },
+          { href: "/register", label: "Join", icon: UserRound },
+        ] as const)
+      : ([
+          { href: "/learn", label: "Learn", icon: BookOpen },
+          { href: "/challenges", label: "Practice", icon: Boxes },
+          { href: "/interview", label: "Mocks", icon: Timer },
+          { href: "/jobs", label: "Jobs", icon: Briefcase },
+        ] as const);
 
   const inCodingSession = /^\/workspace\/[^/]+/.test(pathname);
 
@@ -413,7 +415,12 @@ export function AppShell({
           className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-[var(--surface)] lg:hidden safe-bottom"
           aria-label="Primary"
         >
-          <div className="mx-auto grid h-14 max-w-lg grid-cols-5 gap-0.5 px-1">
+          <div
+            className={cn(
+              "mx-auto grid h-14 max-w-lg gap-0.5 px-1",
+              mobileTabs.length + 1 <= 4 ? "grid-cols-4" : "grid-cols-5",
+            )}
+          >
             {mobileTabs.map((tab) => {
               const Icon = tab.icon;
               const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
