@@ -1,0 +1,1131 @@
+generator client {
+  provider      = "prisma-client-js"
+  // native for local/dev; rhel for Vercel Node runtimes
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  HIRING_MANAGER
+  TECHNICAL_REVIEWER
+  CANDIDATE
+  TEAM_MEMBER
+}
+
+enum SkillSource {
+  CLAIMED
+  PORTFOLIO
+  ASSESSMENT
+  HUMAN_REVIEW
+}
+
+enum ChallengeType {
+  FULL_STACK_SAAS
+  VIDEO_PLATFORM
+  REALTIME_COMMS
+  DISTRIBUTED_INFRA
+  ECOMMERCE
+  AI_SAAS
+  BACKEND
+  FRONTEND
+  INFRASTRUCTURE
+  DISTRIBUTED_SYSTEMS
+  SECURITY
+  DEBUGGING
+  PERFORMANCE
+  ARCHITECTURE
+  TEAM_PROJECT
+  PRODUCTION_INCIDENT
+  DATABASE
+  CODING_PROBLEM
+  // Cybersecurity specialization track
+  APPSEC
+  CLOUD_SECURITY
+  THREAT_MODELING
+  SOC_IR
+  SECURE_CODE_REVIEW
+  CRYPTOGRAPHY
+  ZERO_TRUST
+  DETECTION_ENGINEERING
+  IDENTITY_ACCESS
+  VULN_TRIAGE
+  // Expanded sector tracks
+  DATA_PIPELINE
+  ML_PLATFORM
+  MOBILE_APP
+  SRE_RELIABILITY
+  PRIVACY_ENG
+}
+
+enum AssessmentTrack {
+  SOFTWARE_ENGINEERING
+  CYBERSECURITY
+  SECURE_FULL_STACK
+  PLATFORM_SRE
+  DATA_ML
+  MOBILE
+  PRIVACY_ENGINEERING
+  // Expanded industry + systems tracks
+  FINTECH
+  HEALTHCARE
+  GAME_BACKEND
+  EMBEDDED_IOT
+  EDTECH
+  LOGISTICS
+  CLIMATE_ENERGY
+  REGTECH
+  DEVTOOLS
+  DESIGN_SYSTEMS
+  GROWTH
+  SEARCH_RECS
+  SUPPORT_ENG
+  AI_MLOPS
+  DATABASE_ENGINEERING
+  NETWORK_EDGE
+  CLOUD_INFRA_SECURITY
+  QA_RELIABILITY
+  COMPILER_TOOLING
+  BLOCKCHAIN
+}
+
+enum AssessmentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
+  GRADING
+  UNDER_REVIEW
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMEOUT
+  CANCELLED
+}
+
+enum EvidenceKind {
+  FACT
+  INFERENCE
+  UNKNOWN
+}
+
+enum QualificationTier {
+  NOT_QUALIFIED
+  ELITE
+  EXCEPTIONAL
+  DISTINGUISHED
+}
+
+enum PlanTier {
+  FREE
+  PREMIUM
+}
+
+enum ReviewDecisionType {
+  APPROVE
+  REJECT
+  REQUEST_FOLLOW_UP
+  OVERRIDE_AI
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  /** Null for OAuth-only accounts (Google, GitHub, Apple, Facebook, Discord, X). */
+  passwordHash  String?
+  /** Set when the inbox is proven (email link or verified OAuth). Required for password login. */
+  emailVerifiedAt DateTime?
+  name          String
+  role          Role      @default(CANDIDATE)
+  plan          PlanTier  @default(FREE)
+  planExpiresAt DateTime?
+  avatarUrl     String?
+  githubLogin   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  sessions            Session[]
+  oauthAccounts       OAuthAccount[]
+  candidateProfile    CandidateProfile?
+  createdAssessments  Assessment[]           @relation("AssessmentCreator")
+  assignments         AssessmentAssignment[] @relation("CandidateAssignments")
+  assignedBy          AssessmentAssignment[] @relation("AssignmentAssigner")
+  reviews             ReviewDecision[]
+  auditLogs           AuditLog[]
+  teamMemberships     TeamMember[]
+  reviewNotes         ReviewNote[]
+  followUpAnswers     FollowUpAnswer[]
+  managedTeams        EngineeringTeam[]      @relation("TeamManager")
+  playgrounds         Playground[]
+  interviewSims       InterviewSimulation[]
+  studyEnrollments    StudyPlanEnrollment[]
+  dailyCompletions    DailyChallengeCompletion[]
+  streak              UserStreak?
+  stripeCustomerId    String?
+  contestEntries      ContestEntry[]
+  pairSessionsHost    PairSession[] @relation("PairHost")
+  pairSessionsGuest   PairSession[] @relation("PairGuest")
+  weeklyCompletions   WeeklyChallengeCompletion[]
+  bookmarks           ProblemBookmark[]
+  discussions         ProblemDiscussion[]
+  integrityEvents     IntegrityEvent[]
+  following           DeveloperFollow[] @relation("FollowFollower")
+  followers           DeveloperFollow[] @relation("FollowFollowing")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/** Password signup held until the email link is opened — prevents inbox squatting. */
+model PendingRegistration {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String
+  passwordHash String
+  track        AssessmentTrack @default(SOFTWARE_ENGINEERING)
+  tokenHash    String          @unique
+  expiresAt    DateTime
+  createdAt    DateTime        @default(now())
+
+  @@index([expiresAt])
+}
+
+model OAuthAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  provider       String
+  providerUserId String
+  email          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@index([email])
+}
+
+model CandidateProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  publicSlug       String?  @unique
+  publicEnabled    Boolean  @default(false)
+  headline         String?
+  bio              String?
+  portfolioUrl     String?
+  githubUrl        String?
+  linkedInUrl      String?
+  yearsExperience  Int?
+  previousEmployers Json?
+  languages             String[] @default([])
+  frameworks            String[] @default([])
+  databases             String[] @default([])
+  cloud                 String[] @default([])
+  infrastructure        String[] @default([])
+  aiExperience          String[] @default([])
+  cybersecurity         String[] @default([])
+  securityClearanceNote String?
+  preferredTrack        AssessmentTrack @default(SOFTWARE_ENGINEERING)
+  projectHistory        Json?
+  accommodations        String?
+  /** Cumulative skill pinpoint — what tests have proven this developer knows */
+  knowledgeMap          Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumes           Resume[]
+  skills            SkillRecord[]
+  projectEvidence   ProjectEvidence[]
+}
+
+model Resume {
+  id               String   @id @default(cuid())
+  profileId        String
+  filename         String
+  storagePath      String
+  mimeType         String
+  sizeBytes        Int
+  extractedText    String?
+  aiAnalysis       Json?
+  analyzedAt       DateTime?
+  uploadedAt       DateTime @default(now())
+  profile          CandidateProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+model SkillRecord {
+  id          String      @id @default(cuid())
+  profileId   String
+  name        String
+  domain      String
+  source      SkillSource
+  confidence  Float       @default(0)
+  evidence    String?
+  verifiedBy  String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  profile     CandidateProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, source])
+  @@unique([profileId, name, source])
+}
+
+model ProjectEvidence {
+  id          String   @id @default(cuid())
+  profileId   String
+  title       String
+  description String
+  url         String?
+  skills      String[]
+  attachedBy  String
+  createdAt   DateTime @default(now())
+  profile     CandidateProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Challenge {
+  id                 String          @id @default(cuid())
+  slug               String          @unique
+  title              String
+  summary            String
+  description        String
+  type               ChallengeType
+  track              AssessmentTrack @default(SOFTWARE_ENGINEERING)
+  difficulty         Int             @default(1)
+  estimatedDays      Int             @default(3)
+  tags               String[]        @default([])
+  companies          String[]        @default([])
+  frequency          Int             @default(0)
+  avgMinutes         Int             @default(60)
+  isPremium          Boolean         @default(false)
+  starterRepoPath    String?
+  referenceSolution  String?
+  hiddenRequirements Json?
+  publicRequirements Json?
+  gradingRubric      Json?
+  adaptiveTrack      Json?
+  // Controlled vuln labs only — never production secrets
+  controlledVulns    Json?
+  mitreMappings      String[]        @default([])
+  owaspMappings      String[]        @default([])
+  languages          String[]        @default(["typescript", "python", "go"])
+  /** Progressive unlock hints (string[]). Null → synthesized from requirements at read time. */
+  hints              Json?
+  /** Content fingerprint — statement + requirements + harness binding. Bumps when challenge content changes. */
+  contentVersion     String?
+  /** unknown | pass | warn | fail — last Challenge Integrity Engine result. */
+  integrityStatus    String          @default("unknown")
+  integrityScannedAt DateTime?
+  /** Suggested difficulty from live solver performance (null until calibrated). */
+  calibratedDifficulty Int?
+  /** Expected asymptotic complexity label, e.g. "O(n log n)". */
+  expectedComplexity String?
+  /** Judge resource limits (coding). */
+  timeLimitMs        Int             @default(2000)
+  memoryLimitMb      Int             @default(256)
+  /** Required export / function signature hint for coding problems. */
+  functionSignature  String?
+  /** Research Frontier flag — D10 exceptional challenges. */
+  researchFrontier   Boolean         @default(false)
+  /** Seeded adversarial suite metadata (never includes private fixtures in API). */
+  adversarialMeta    Json?
+  isPublished        Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  assessments      Assessment[]
+  incidents        IncidentScenario[]
+  interviewSims    InterviewSimulation[]
+  dailyChallenges  DailyChallenge[]
+  weeklyChallenges WeeklyChallenge[]
+  editorials       Editorial[]
+  contestProblems  ContestProblem[]
+  bookmarks        ProblemBookmark[]
+  discussions      ProblemDiscussion[]
+  integrityEvents  IntegrityEvent[]
+  integrityReports ChallengeIntegrityReport[]
+  aiBenchmarkRuns  AiBenchmarkRun[]
+  challengeVersions ChallengeVersion[]
+}
+
+/** Snapshot from Challenge Integrity Engine — gates publish when status=fail. */
+model ChallengeIntegrityReport {
+  id                   String   @id @default(cuid())
+  challengeId          String
+  contentVersion       String
+  status               String
+  findingCount         Int      @default(0)
+  errorCount           Int      @default(0)
+  warningCount         Int      @default(0)
+  findings             Json
+  calibratedDifficulty Int?
+  liveAcceptancePct    Float?
+  avgRuntimeMs         Float?
+  sampleSubmissions    Int      @default(0)
+  scannedAt            DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId, scannedAt])
+  @@index([status, scannedAt])
+}
+
+/** LeetCode-style problem bookmarks (favorites). */
+model ProblemBookmark {
+  id          String   @id @default(cuid())
+  userId      String
+  challengeId String
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([userId, createdAt])
+}
+
+/** Problem discussion threads (LeetCode-style boards). */
+model ProblemDiscussion {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  parentId    String?
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  challenge Challenge           @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    ProblemDiscussion?  @relation("DiscussionReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   ProblemDiscussion[] @relation("DiscussionReplies")
+
+  @@index([challengeId, createdAt])
+  @@index([userId])
+}
+
+/** Assessment integrity signals — never auto-fail; always human-reviewable. */
+model IntegrityEvent {
+  id           String   @id @default(cuid())
+  userId       String
+  challengeId  String?
+  assignmentId String?
+  kind         String
+  severity     String   @default("info")
+  score        Float?
+  detail       Json?
+  reviewed     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([challengeId, kind])
+  @@index([reviewed, createdAt])
+}
+
+/** Developer following graph for community. */
+model DeveloperFollow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model Playground {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  folder    String   @default("Inbox")
+  language  String   @default("typescript")
+  content   String   @default("// Crucible Playground\n")
+  layout    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, folder])
+}
+
+model InterviewSimulation {
+  id           String   @id @default(cuid())
+  userId       String
+  company      String
+  role         String
+  challengeId  String
+  timedMinutes Int      @default(45)
+  status       String   @default("READY")
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  score        Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge    Challenge @relation(fields: [challengeId], references: [id])
+
+  @@index([userId, company])
+}
+
+model Assessment {
+  id              String           @id @default(cuid())
+  title           String
+  description     String
+  challengeId     String
+  track           AssessmentTrack  @default(SOFTWARE_ENGINEERING)
+  status          AssessmentStatus @default(DRAFT)
+  timedMinutes    Int?
+  multiDay        Boolean          @default(true)
+  allowTeam       Boolean          @default(false)
+  teamSizeMin     Int?
+  teamSizeMax     Int?
+  progressiveDiff Boolean          @default(true)
+  createdById     String
+  scoringPolicyId String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  challenge     Challenge              @relation(fields: [challengeId], references: [id])
+  createdBy     User                   @relation("AssessmentCreator", fields: [createdById], references: [id])
+  scoringPolicy ScoringPolicy?         @relation(fields: [scoringPolicyId], references: [id])
+  assignments   AssessmentAssignment[]
+  teams         EngineeringTeam[]
+
+  @@index([status])
+  @@index([track])
+}
+
+model ScoringPolicy {
+  id                    String   @id @default(cuid())
+  name                  String
+  minOverall            Int      @default(90)
+  minCategoryPct        Int      @default(80)
+  requireDeployment     Boolean  @default(true)
+  requireHiddenTests    Boolean  @default(true)
+  requireIncident       Boolean  @default(true)
+  requireArchitecture   Boolean  @default(true)
+  requireTeam           Boolean  @default(true)
+  requireHumanApproval   Boolean  @default(true)
+  requireNoCriticalSec  Boolean  @default(true)
+  weights               Json
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  assessments           Assessment[]
+}
+
+model AssessmentAssignment {
+  id               String           @id @default(cuid())
+  assessmentId     String
+  candidateId      String
+  assignedById     String
+  status           AssignmentStatus @default(ASSIGNED)
+  dueAt            DateTime?
+  startedAt        DateTime?
+  submittedAt      DateTime?
+  currentLevel     Int              @default(1)
+  maxLevelReached  Int              @default(1)
+  accommodations   String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  assessment   Assessment          @relation(fields: [assessmentId], references: [id])
+  candidate    User                @relation("CandidateAssignments", fields: [candidateId], references: [id])
+  assignedBy   User                @relation("AssignmentAssigner", fields: [assignedById], references: [id])
+  workspace    Workspace?
+  submissions  Submission[]
+  scoreReport  ScoreReport?
+  followUps    FollowUpQuestion[]
+  reviews      ReviewDecision[]
+  deployments  DeploymentResult[]
+  teamMemberId String?
+
+  @@unique([assessmentId, candidateId])
+  @@index([candidateId, status])
+}
+
+model Workspace {
+  id             String   @id @default(cuid())
+  assignmentId   String   @unique
+  language       String   @default("typescript")
+  imageTag       String   @default("crucible/node:20")
+  rootPath       String
+  gitRemoteUrl   String?
+  lastCommitSha  String?
+  previewUrl     String?
+  status         String   @default("ready")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  assignment AssessmentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  files      WorkspaceFile[]
+  jobs       ExecutionJob[]
+  commits    GitCommit[]
+  pullReqs   PullRequest[]
+}
+
+model WorkspaceFile {
+  id          String   @id @default(cuid())
+  workspaceId String
+  path        String
+  content     String
+  language    String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, path])
+}
+
+model GitCommit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  sha         String
+  message     String
+  authorEmail String
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model PullRequest {
+  id          String   @id @default(cuid())
+  workspaceId String
+  number      Int
+  title       String
+  body        String?
+  status      String   @default("open")
+  reviews     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Submission {
+  id            String   @id @default(cuid())
+  assignmentId  String
+  commitSha     String?
+  notes         String?
+  artifactPath  String?
+  createdAt     DateTime @default(now())
+  assignment    AssessmentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  testRuns      TestRun[]
+  aiEvaluations AiEvaluation[]
+
+  @@index([assignmentId])
+}
+
+model ExecutionJob {
+  id           String          @id @default(cuid())
+  workspaceId  String
+  type         String
+  status       ExecutionStatus @default(QUEUED)
+  priority     Int             @default(0)
+  imageTag     String
+  command      String
+  cpuLimit     String          @default("1")
+  memoryLimit  String          @default("512m")
+  timeoutSec   Int             @default(120)
+  networkMode  String          @default("none")
+  stdout       String?
+  stderr       String?
+  exitCode     Int?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  auditMeta    Json?
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  testRun      TestRun?
+
+  @@index([status, priority])
+}
+
+model TestRun {
+  id            String   @id @default(cuid())
+  submissionId  String?
+  jobId         String   @unique
+  suite         String
+  passed        Int      @default(0)
+  failed        Int      @default(0)
+  hiddenPassed  Int      @default(0)
+  hiddenFailed  Int      @default(0)
+  results       Json
+  createdAt     DateTime @default(now())
+  submission    Submission?   @relation(fields: [submissionId], references: [id])
+  job           ExecutionJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model DeploymentResult {
+  id           String   @id @default(cuid())
+  assignmentId String
+  success      Boolean
+  url          String?
+  checks       Json
+  logs         String?
+  createdAt    DateTime @default(now())
+  assignment   AssessmentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+}
+
+model ScoreReport {
+  id                 String             @id @default(cuid())
+  assignmentId       String             @unique
+  overall            Float
+  frontend           Float
+  backend            Float
+  database           Float
+  architecture       Float
+  infrastructure     Float
+  security           Float
+  testing            Float
+  problemSolving     Float
+  performance        Float
+  collaboration      Float
+  qualified          Boolean            @default(false)
+  tier               QualificationTier  @default(NOT_QUALIFIED)
+  mandatoryFailures  String[]           @default([])
+  calibrated         Boolean            @default(false)
+  /** Per-assignment skill pinpoint after public/hidden tests */
+  diagnostics        Json?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  assignment         AssessmentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  categories         ScoreCategoryEvidence[]
+}
+
+model ScoreCategoryEvidence {
+  id            String       @id @default(cuid())
+  reportId      String
+  criterion     String
+  score         Float
+  maxScore      Float
+  evidenceKind  EvidenceKind
+  observed      String
+  automated     String?
+  strengths     String[]
+  weaknesses    String[]
+  explanation   String
+  followUps     String[]
+  report        ScoreReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model AiProviderConfig {
+  id           String   @id @default(cuid())
+  name         String
+  baseUrl      String
+  model        String
+  apiKeyEnv    String
+  isDefault    Boolean  @default(false)
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AiEvaluation {
+  id            String   @id @default(cuid())
+  submissionId  String
+  provider      String
+  model         String
+  report        Json
+  rawResponse   String?
+  createdAt     DateTime @default(now())
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+}
+
+model FollowUpQuestion {
+  id           String   @id @default(cuid())
+  assignmentId String
+  prompt       String
+  basedOnPath  String?
+  difficulty   Int      @default(1)
+  createdAt    DateTime @default(now())
+  assignment   AssessmentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  answers      FollowUpAnswer[]
+}
+
+model FollowUpAnswer {
+  id         String   @id @default(cuid())
+  questionId String
+  userId     String
+  answer     String
+  score      Float?
+  feedback   String?
+  createdAt  DateTime @default(now())
+  question   FollowUpQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id])
+}
+
+model ReviewDecision {
+  id           String             @id @default(cuid())
+  assignmentId String
+  reviewerId   String
+  decision     ReviewDecisionType
+  reasoning    String
+  overridesAi  Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+  assignment   AssessmentAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  reviewer     User                 @relation(fields: [reviewerId], references: [id])
+}
+
+model ReviewNote {
+  id           String   @id @default(cuid())
+  assignmentId String
+  authorId     String
+  body         String
+  path         String?
+  line         Int?
+  createdAt    DateTime @default(now())
+  author       User     @relation(fields: [authorId], references: [id])
+}
+
+model EngineeringTeam {
+  id           String   @id @default(cuid())
+  name         String
+  assessmentId String
+  managerId    String
+  createdAt    DateTime @default(now())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  manager      User       @relation("TeamManager", fields: [managerId], references: [id])
+  members      TeamMember[]
+  discussions  TeamDiscussion[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  roleLabel String
+  duties    String
+  joinedAt  DateTime @default(now())
+  team      EngineeringTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+}
+
+model TeamDiscussion {
+  id        String   @id @default(cuid())
+  teamId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+  team      EngineeringTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model IncidentScenario {
+  id          String   @id @default(cuid())
+  challengeId String?
+  slug        String   @unique
+  title       String
+  synopsis    String
+  symptoms    Json
+  rootCause   String
+  buggyFiles  Json
+  createdAt   DateTime @default(now())
+  challenge   Challenge? @relation(fields: [challengeId], references: [id])
+  runs        IncidentRun[]
+}
+
+model IncidentRun {
+  id              String   @id @default(cuid())
+  scenarioId      String
+  assignmentId    String?
+  candidateId     String
+  diagnosis       String?
+  rootCauseFound  Boolean  @default(false)
+  fixApplied      Boolean  @default(false)
+  regressionTests Boolean  @default(false)
+  recovered       Boolean  @default(false)
+  preventionDoc   String?
+  timeline        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  scenario        IncidentScenario @relation(fields: [scenarioId], references: [id])
+}
+
+model ArchitectureSubmission {
+  id           String   @id @default(cuid())
+  assignmentId String
+  diagrams     Json
+  proposal     String
+  answers      Json
+  score        Float?
+  feedback     String?
+  createdAt    DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model StudyPlanEnrollment {
+  id               String   @id @default(cuid())
+  userId           String
+  planSlug         String
+  completedSlugs   String[] @default([])
+  startedAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, planSlug])
+  @@index([userId])
+}
+
+model DailyChallenge {
+  id          String   @id @default(cuid())
+  dateKey     String   @unique
+  challengeId String
+  createdAt   DateTime @default(now())
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+  completions DailyChallengeCompletion[]
+}
+
+model DailyChallengeCompletion {
+  id               String   @id @default(cuid())
+  userId           String
+  dailyChallengeId String
+  completedAt      DateTime @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyChallenge   DailyChallenge @relation(fields: [dailyChallengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dailyChallengeId])
+  @@index([userId])
+}
+
+model UserStreak {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastDateKey    String?
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PlatformSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+}
+
+model WeeklyChallenge {
+  id          String   @id @default(cuid())
+  weekKey     String   @unique
+  challengeId String
+  title       String
+  synopsis    String
+  createdAt   DateTime @default(now())
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+  completions WeeklyChallengeCompletion[]
+}
+
+model WeeklyChallengeCompletion {
+  id                String   @id @default(cuid())
+  userId            String
+  weeklyChallengeId String
+  score             Float?
+  completedAt       DateTime @default(now())
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyChallenge   WeeklyChallenge @relation(fields: [weeklyChallengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weeklyChallengeId])
+  @@index([userId])
+}
+
+model Contest {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  startsAt    DateTime
+  endsAt      DateTime
+  isPremium   Boolean  @default(false)
+  /** HUMAN | AI | HYBRID | TEAM */
+  mode        String   @default("HUMAN")
+  /** DRAFT | SCHEDULED | LIVE | COMPLETED | CANCELLED */
+  status      String   @default("SCHEDULED")
+  bracketJson Json?
+  createdAt   DateTime @default(now())
+  problems    ContestProblem[]
+  entries     ContestEntry[]
+}
+
+/** Immutable snapshot of challenge content for versioned judging. */
+model ChallengeVersion {
+  id             String   @id @default(cuid())
+  challengeId    String
+  version        Int
+  contentVersion String
+  title          String
+  description    String
+  difficulty     Int
+  functionSignature String?
+  timeLimitMs    Int
+  memoryLimitMb  Int
+  expectedComplexity String?
+  publicRequirements Json?
+  snapshot       Json?
+  createdAt      DateTime @default(now())
+  challenge      Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, version])
+  @@index([challengeId])
+}
+
+/** Registered AI model for human-vs-AI benchmarks (never receives hidden tests). */
+model AiModel {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  displayName  String
+  provider     String
+  modelId      String
+  baseUrl      String?
+  apiKeyEnv    String?
+  enabled      Boolean  @default(true)
+  isOpenSource Boolean  @default(false)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  runs         AiBenchmarkRun[]
+}
+
+/** One AI attempt on a challenge — public statement only; hidden suite judged server-side. */
+model AiBenchmarkRun {
+  id              String   @id @default(cuid())
+  challengeId     String
+  aiModelId       String
+  status          String   @default("QUEUED")
+  /** experimental | verified */
+  resultClass     String   @default("experimental")
+  promptTokens    Int?
+  completionTokens Int?
+  latencyMs       Int?
+  runtimeMs       Int?
+  memoryKb        Int?
+  passedPublic    Int      @default(0)
+  totalPublic     Int      @default(0)
+  passedHidden    Int      @default(0)
+  totalHidden     Int      @default(0)
+  correct         Boolean  @default(false)
+  /** Generated code (admin/auditor only — not public API by default). */
+  solutionCode    String?
+  diagnostics     Json?
+  mocked          Boolean  @default(false)
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  finishedAt      DateTime?
+  challenge       Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  aiModel         AiModel   @relation(fields: [aiModelId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId, createdAt])
+  @@index([aiModelId, createdAt])
+  @@index([correct, challengeId])
+}
+
+model ContestProblem {
+  id          String @id @default(cuid())
+  contestId   String
+  challengeId String
+  ordinal     Int    @default(0)
+  points      Int    @default(100)
+  contest     Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+
+  @@unique([contestId, challengeId])
+  @@index([contestId])
+}
+
+model ContestEntry {
+  id          String   @id @default(cuid())
+  contestId   String
+  userId      String
+  score       Float    @default(0)
+  solvedCount Int      @default(0)
+  penaltyMin  Int      @default(0)
+  rank        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  contest     Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId])
+  @@index([contestId, score])
+}
+
+model Editorial {
+  id          String   @id @default(cuid())
+  challengeId String
+  slug        String   @unique
+  title       String
+  bodyMd      String
+  approach    String?
+  complexity  String?
+  isPremium   Boolean  @default(true)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId])
+}
+
+model PairSession {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  workspaceId String
+  hostId      String
+  guestId     String?
+  guestRole   String   @default("SHADOW")
+  status      String   @default("WAITING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  host        User     @relation("PairHost", fields: [hostId], references: [id], onDelete: Cascade)
+  guest       User?    @relation("PairGuest", fields: [guestId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([hostId])
+}

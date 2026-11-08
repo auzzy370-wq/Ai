@@ -1,0 +1,1277 @@
+From 3112f8ff460abb2d5da00827edbc7c768f3ede9a Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 8 Nov 2026 17:27:49 +0000
+Subject: [PATCH 1/2] Honest product loop: lean landing, judge-offline UX,
+ guest save CTA
+
+- One primary CTA; hiring as footnote; drop IDE theater
+- Disable Run/Submit when JUDGE_ONLINE is unset; fail closed stays
+- Cap generated bank behind signed-in Practice volume
+- Seed elite demos with craft/arcade progress; trim README claims
+- Hide admin competition/AI sprawl; hide mock Premium without flag
+- DEMO_SKIP_EMAIL_VERIFY for local demos only
+---
+ .env.example                                  |   6 +-
+ README.md                                     | 180 +++++-------------
+ src/app/(app)/challenges/page.tsx             |  31 +--
+ src/app/(app)/learn/page.tsx                  |   2 +
+ src/app/(app)/pricing/page.tsx                |   2 +
+ src/app/(app)/workspace/[id]/page.tsx         |   5 +
+ src/app/api/auth/register/route.ts            |   4 +-
+ src/components/admin/admin-client.tsx         |  11 +-
+ src/components/challenges/problemset.tsx      |  25 ++-
+ .../learn/games/use-arcade-clear.ts           |  12 +-
+ src/components/learn/lesson-player.tsx        |  16 +-
+ src/components/learn/save-progress-cta.tsx    |  69 +++++++
+ src/components/marketing/landing.tsx          | 115 +++--------
+ src/components/saas/pricing-client.tsx        |  30 ++-
+ src/components/workspace/ide.tsx              |  80 +++++++-
+ src/server/auth/email-verification.ts         |  38 +++-
+ src/server/bootstrap-seed.ts                  |  57 ++++++
+ src/server/execution/judge-status.ts          |  19 ++
+ 18 files changed, 438 insertions(+), 264 deletions(-)
+ create mode 100644 src/components/learn/save-progress-cta.tsx
+ create mode 100644 src/server/execution/judge-status.ts
+
+diff --git a/.env.example b/.env.example
+index e3c8e62..8ab3e5f 100644
+--- a/.env.example
++++ b/.env.example
+@@ -25,6 +25,8 @@ STORAGE_ROOT="./storage"
+ # Only docker is supported. Host-process / scratch execution is refused.
+ EXECUTION_MODE="docker"
+ WORKER_CONCURRENCY="2"
++# Live judging: require a worker process. Leave unset/false in public deploys without Docker.
++# JUDGE_ONLINE=true
+ 
+ # Free AI vs Human (preferred) — https://console.groq.com
+ GROQ_API_KEY=""
+@@ -57,11 +59,13 @@ STRIPE_SECRET_KEY=""
+ STRIPE_WEBHOOK_SECRET=""
+ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=""
+ 
+-# Optional local demos only — never ship these values
++# Optional local demos only — never ship these values on public hosts
+ ALLOW_DEMO_ACCOUNTS=false
+ DEMO_ADMIN_PASSWORD=
+ DEMO_CANDIDATE_PASSWORD=
+ ALLOW_MOCK_BILLING=false
++# Skip inbox verification on register (local/demo only — never true in production)
++DEMO_SKIP_EMAIL_VERIFY=false
+ 
+ # Social login (optional — buttons appear when a provider's pair is set)
+ # Callback: {APP_URL}/api/auth/oauth/{google|github|apple|facebook|discord|x}/callback
+diff --git a/README.md b/README.md
+index 7be92b0..ec8fe20 100644
+--- a/README.md
++++ b/README.md
+@@ -1,172 +1,86 @@
+ # CRUCIBLE
+ 
+-**Release 1.4** — **Learn the craft. Hire the proof.** Elite **AI vs Human** competition & benchmarking on the same objectively judged challenges (D1–D10 Research Frontier).
++**Release 1.4** — **Learn the craft. Hire the proof.**
+ 
+-Crucible is a **learning arena**, **employer testing floor**, and **human × AI competition platform**. Engineers and models solve identical public statements; hidden suites stay server-side when `EXECUTION_MODE=docker` and a worker are attached. Coding judges in **TypeScript, JavaScript, Python, Go, Rust, and Java**. Without Docker, hidden suites **fail closed** (no keyword-grep passes). Résumés claim. **Crucible verifies when the harness runs.**
++Crucible is a **learning arena** and **employer testing floor**. Learners practice with short lessons and a **hand-authored** problem bank; employers assign timed assessments and review scorecards. Coding judges (TypeScript, JavaScript, Python, Go, Rust, Java) run in **Docker** when a worker is attached (`JUDGE_ONLINE=true`). Without a worker, Run/Submit stay **offline** (fail closed).
+ 
+-Competition surfaces: `/tournaments`, `/leaderboards`, `/ai-vs-human`, `/research-frontier`, `/benchmarks`. Plan: [docs/COMPETITION_PLATFORM_PLAN.md](docs/COMPETITION_PLATFORM_PLAN.md).
++Core loop: **Learn → Practice → timed assessment → qualification profile.**
+ 
+-The seed loads the challenge library as published timed assessments with demo assignments, workspaces, and tests already placed. See [docs/RELEASE.md](docs/RELEASE.md).
++Optional competition surfaces (`/tournaments`, `/leaderboards`, `/ai-vs-human`, …) exist but stay secondary until the learner loop is solid. Plan notes: [docs/COMPETITION_PLATFORM_PLAN.md](docs/COMPETITION_PLATFORM_PLAN.md).
+ 
+ ## Learning
+ 
+ | Path | Route | What you get |
+ |------|-------|----------------|
+-| **Learning hub** | `/learn` | Level, XP and streak; today’s two goals; craft paths; learner home after sign-in |
+-| **Learn Arcade** | `/learn/games` | Four hand-built games: Framework Flow, Big-O Blitz, Pair Seeker, Binary Range |
+-| **Interview Craft** | `/learn/interview` | Loop mechanics, live-coding framework, DSA patterns, system design, behavioral STAR |
+-| **AI Craft** | `/learn/ai` | Prompting, APIs, tools, RAG, agents, evals, safety |
+-| **Study plans** | `/study-plans` | Company and role problem lists; each solved problem earns XP |
+-| **Company mocks** | `/interview` | Phone / coding / onsite rounds, briefings, 1 free mock then Premium |
+-| **Jobs** | `/jobs` | Aggregated official career-board links (not Crucible-hosted applications) |
+-| **Roadmap** | `/roadmap` | Skill tree + next problems |
+-
+-## Tracks
+-
+-**Hand-authored** project + coding challenges ship in the core catalog. The seed also **procedurally expands** each track toward ~250 project slots (topic variants) and a **~4,000-item generated coding bank** (family templates × N, Easy → Impossible) for volume practice. Generated items are tagged `generated` and do **not** claim to be real company interview transcripts. Post-test **knowledge pinpoint** records which skills were proven vs gaps when harnesses run.
+-
+-### Core
+-| Track | Focus |
+-|-------|--------|
+-| Software Engineering | SaaS, APIs, frontend, realtime, distributed systems, performance, architecture |
+-| Cybersecurity | AppSec, threat modeling, SOC/IR, crypto, zero trust, detection, IAM, vuln triage |
+-| Secure Full-Stack | Product delivery with elevated security bar |
+-| Platform / SRE | SLOs, on-call, canaries, DR, capacity, synthetics |
+-| Data / ML Engineering | ETL, CDC, feature stores, model registry, DQ, lineage |
+-| Mobile Engineering | Offline sync, push, deep links, attestation, IAP, OTA |
+-| Privacy Engineering | Consent, DSAR, retention, DP, purpose limitation, transfers, DPIA |
+-
+-### Industry
+-| Track | Focus |
+-|-------|--------|
+-| FinTech / Payments | Ledgers, idempotent charges, fraud, wallets, settlement, KYC |
+-| Healthcare / HITRUST | PHI vaults, FHIR-lite, e-prescribe, BAAs, telehealth tokens |
+-| Game Backend | Matchmaking, authoritative sim, anti-cheat, economy, replays |
+-| Embedded / IoT | Signed OTA, attestation, fleet config, MQTT ACL, power budgets |
+-| EdTech | LMS roster, autograde sandboxes, FERPA export, quiz banks |
+-| Logistics / Supply Chain | Routing, ASN, POD, cold chain, dock scheduling |
+-| Climate / Energy Tech | Grid telemetry, carbon ledger, demand response, MRV packs |
+-| RegTech / LegalTech | Policy-as-code, SAR workflow, legal hold, trade surveillance |
+-
+-### Platform & systems
+-| Track | Focus |
+-|-------|--------|
+-| Developer Tooling | LSP, CI plugins, sandboxes, codegen, test-impact |
+-| Design Systems / Frontend Platform | Tokens, a11y kits, visual regression, living docs |
+-| Growth / Experimentation | Bucketing, exposures, guardrails, funnels, paywalls |
+-| Search / Recommendations | Indexes, ranking features, typeahead, safe search |
+-| Support Platform Engineering | Ticket routing, macros, CSAT, KB search, SLA breach |
+-| AI / MLOps Product | Model registry, feature store, RAG eval, prompt firewall |
+-| Database Engineering | Buffer pool, WAL, MVCC, planners, sharding |
+-| Networking / Edge | CDN keys, DNS failover, LB algos, WAF, anycast |
+-| Cloud / Infra Security | IAM least-privilege, image gates, K8s hardening, OIDC |
+-| QA / Reliability Engineering | Flake quarantine, contracts, chaos gamedays, synthetics |
+-| Compilers / Language Tooling | Lexer/parser, typecheck, IR, bytecode VM, formatters |
+-| Blockchain / Web3 | Wallet policy, vesting, bridges, indexers, multisig |
+-
+-Skills on profiles are separated into **claimed**, **portfolio**, **assessment-verified**, and **human-reviewed**. Résumé claims never prove competence.
++| **Learning hub** | `/learn` | Level, XP, streak; today’s goals; craft paths |
++| **Learn Arcade** | `/learn/games` | Four hand-built games |
++| **Interview Craft** | `/learn/interview` | Interview loop + patterns |
++| **AI Craft** | `/learn/ai` | Prompting → agents → evals |
++| **Problem bank** | `/challenges` | Hand-authored core by default |
++| **Company mocks** | `/interview` | Timed rounds (signed-in) |
++| **Jobs** | `/jobs` | Aggregated official career links |
++
++Guests can use **Learn** + **Practice**. Mocks, jobs, and compete require sign-in.
++
++## Challenge library
++
++- **Hand-authored core** — curated projects + coding problems (default UI).
++- **Generated practice volume** — procedural `q-*` / `exp-*` variants for signed-in users who opt in. Not claimed as company interview transcripts.
++
++## Tracks (assessment focus)
++
++Core hiring/practice tracks: Software Engineering, Cybersecurity, Secure Full-Stack, Platform/SRE, Data/ML, Mobile, Privacy — plus industry packs when seeded. Skills on profiles: **claimed**, **portfolio**, **assessment-verified**, **human-reviewed**.
+ 
+ ## Elite scoring (100)
+ 
+ Default engineering weights: Frontend 10 · Backend 15 · Database 10 · Architecture 15 · Infrastructure 10 · Security 10 · Testing 10 · Problem-solving 10 · Performance 5 · Collaboration 5.
+ 
+-Cybersecurity track elevates **security (25)** and **problem-solving (15)**.
++Qualification requires strong category scores, harness evidence when the judge is online, and **human reviewer approval** where configured.
++
++## Deploy (stable)
++
++### Cursor Publish
+ 
+-Qualification requires ≥90 overall, ≥80% in critical categories, deployment + hidden tests + incident recovery + architecture (+ team when required), no critical vulns, and **human reviewer approval**. AI assists; humans decide.
++Publish the app folder with `cursor-app.json` (`"database": "postgres"`). Set secrets: `SESSION_SECRET`, `SETUP_SECRET`, `DEMO_SKIP_EMAIL_VERIFY` (demo only), leave `ALLOW_MOCK_BILLING` unset in production, leave `JUDGE_ONLINE` unset until a Docker worker exists.
+ 
+-## Deploy on Vercel (test)
++### Vercel + Neon
+ 
+-See **[docs/VERCEL.md](docs/VERCEL.md)**. You need a Neon (or other) Postgres `DATABASE_URL`, then:
++See **[docs/VERCEL.md](docs/VERCEL.md)**.
+ 
+ ```bash
+ vercel login && vercel link
+-vercel env add DATABASE_URL   # also SESSION_SECRET, SETUP_SECRET, EXECUTION_MODE=docker, AI_FALLBACK_MOCK=true, NEXT_PUBLIC_APP_URL
++vercel env add DATABASE_URL   # Neon pooled URL
++vercel env add SESSION_SECRET
++vercel env add SETUP_SECRET
++vercel env add EXECUTION_MODE   # docker
++vercel env add NEXT_PUBLIC_APP_URL
++# Do NOT set ALLOW_MOCK_BILLING or JUDGE_ONLINE until ready
+ vercel --prod
+-curl -X POST https://YOUR_APP.vercel.app/api/setup -H 'content-type: application/json' -d '{"secret":"YOUR_SETUP_SECRET","seed":true}'
++curl -X POST https://YOUR_APP.vercel.app/api/setup \
++  -H 'content-type: application/json' \
++  -d '{"secret":"YOUR_SETUP_SECRET","seed":true}'
+ ```
+ 
+-Candidate code execution requires `EXECUTION_MODE=docker` (host-process mode is refused). On Vercel without a Docker worker, Run/Judge jobs fail closed until a container executor is attached.
+-
+ ## Quick start (local)
+ 
+ ```bash
+ cp .env.example .env
+-# Start Postgres + Redis (or: docker compose up -d postgres redis minio)
++# Start Postgres (+ Redis optional)
+ npm install
+ npx prisma db push
+ npm run db:seed
+-npm run release:check
+ npm run dev          # http://localhost:3847
+-npm run dev:worker   # optional execution worker
++# Optional: JUDGE_ONLINE=true + npm run dev:worker when Docker is available
+ ```
+ 
+-Presentation deck: http://localhost:3847/presentation.html  
+-Speaker script: http://localhost:3847/presentation-script.html
++## Accounts
+ 
++Register at `/register`. With `DEMO_SKIP_EMAIL_VERIFY=true`, registration signs you in immediately (local/demo only).
+ 
+-### Docker Compose
++Demo staff/candidate accounts are **optional** (`ALLOW_DEMO_ACCOUNTS=true` + `DEMO_*` passwords) — never commit those values.
+ 
+-```bash
+-docker compose up --build
+-```
++## Hiring loop (keep lean)
+ 
+-Compose runs Postgres, Redis, MinIO, web, and worker. **Do not** treat Docker-socket mounts as production isolation — use microVMs/gVisor for hostile workloads.
+-
+-More detail: [docs/VERCEL.md](docs/VERCEL.md).
+-
+-## Accounts
++1. Create assessment → 2. Assign candidate → 3. Candidate completes workspace → 4. Review / scorecard.
+ 
+-Register a learner at `/register`, or sign in with **Google, GitHub, Apple, Facebook, Discord, or X** when those OAuth apps are configured (see `.env.example`). Callback URL for each provider:
+-
+-`{APP_URL}/api/auth/oauth/{provider}/callback`
+-
+-Demo staff/candidate accounts are **optional** and only created when you set `ALLOW_DEMO_ACCOUNTS=true` plus `DEMO_ADMIN_PASSWORD` and `DEMO_CANDIDATE_PASSWORD` in your local environment — never commit those values.
+-
+-Admins can **Auto-run all assessments** and **Post assignment scores** from the Admin competition panel.
+-
+-## SaaS prep features
+-
+-- **Entry** — `/` sends guests to the free Learn page (with a dismissible sign-in popup); learners land on `/learn`, hiring staff on `/dashboard`
+-- **Daily Challenge** — `/daily` with streak tracking
+-- **Weekly broken production** — `/weekly` shared incident/SaaS failure for the week
+-- **Contest Arena** — `/contest` optional heat + leaderboard
+-- **Editorials** — `/editorials` free + Premium solutions after judge signal
+-- **Study Plans** — `/study-plans` company/role problem lists with progress and XP
+-- **Lightning Judge / Debugger / AI autocomplete** — Premium priority queue, interactive debugger, Monaco AI completions
+-- **Hidden harnesses** — coding Submit runs real hidden fixtures (TS/Python); Python & Go starters included
+-- **Public qualification profiles** — `/u/casey-elite`, `/u/sam-appsec`, `/u/premium-prep`
+-- **Employer scorecards** — `/api/scorecards/[assignmentId]` HTML print + `?format=ats` text export
+-- **Pair / interviewer shadow** — host a code from the IDE; guest joins the same workspace
+-- **Premium Checkout** — `/pricing` uses Stripe when `STRIPE_SECRET_KEY` is set; otherwise instant mock upgrade
+-- Webhook: `POST /api/billing/webhook` (set `STRIPE_WEBHOOK_SECRET`)
+-- Frequency % is labeled **illustrative** (methodology in problemset UI)
+-- **Settings** — `/settings` account, practice preferences (headline, bio, skills, links), privacy/public slug, password, and session revoke (staff see account/security/sessions only)
+-- **Hiring analytics** — `/analytics` for Super Admin, Hiring Manager, and Technical Reviewer
+-- **Admin control plane** — `/admin` (Super Admin) overview, analytics, users/roles/plans, assignments, challenge library publish/premium, execution drain/retry, AI providers, audit log, system posture
+-- **Role visibility** — nav and page guards limit each role to surfaces they can use (candidates ↔ practice; hiring ↔ ops/reviews/analytics; Super Admin ↔ control plane)
+-- **Bookmarks + live acceptance** — star problems in the bank; Acc shows live % after ≥3 hidden submits
+-- **Practice assist in IDE** — progressive hints, submission history, custom test cases, related problems, discussions
+-- **Adaptive roadmap** — `/roadmap` skill tree, weak tags, rising difficulty recommendations
+-- **Assessment integrity** — advisory similarity / fingerprint signals on submit (`IntegrityEvent`); humans review — never auto-fail
+-- **Advanced missions** — payments ledger, cache-stampede incident, OAuth BFF, data pipeline, k8s rollout, RAG eval, outbox, N+1 kill
+-- Advancement audit + backlog: [docs/ADVANCEMENT_AUDIT.md](docs/ADVANCEMENT_AUDIT.md) · [docs/ADVANCEMENT_PROGRESS.md](docs/ADVANCEMENT_PROGRESS.md)
+-- **Challenge Integrity Engine** — admin Integrity tab + publish gate; detects harness/ID mismatches, bad references, duplicate/contradictory tests, unrealistic difficulty, missing edges, hidden leakage, nondeterminism. Docs: [docs/CHALLENGE_INTEGRITY.md](docs/CHALLENGE_INTEGRITY.md) · CLI: `npx tsx scripts/challenge-integrity.ts`
+-
+-## Core workflow
+-
+-1. Admin/hiring manager creates an assessment from the challenge library (including cyber challenges). Default session length is **60 minutes**.
+-2. Candidate registers / uses seed account; uploads PDF résumé (claims only).
+-3. Manager assigns assessment → isolated workspace provisioned with a live countdown.
+-4. Candidate builds in Monaco IDE, commits, runs sandboxed tests / hidden tests / deploy checks.
+-5. Submit → evidence-based AI evaluation (no invented test results; mock LLM if no API key).
+-6. Candidate completes architecture package, incident/SOC simulation, follow-ups, optional team crucible.
+-7. Human reviewer approves/rejects with documented reasoning.
+-8. Qualification report + skill lanes updated.
+-
+-## AI configuration
+-
+-Set `OPENAI_API_KEY` (and optional `OPENAI_BASE_URL` / `OPENAI_MODEL`). With `AI_FALLBACK_MOCK=true`, grading uses deterministic mock scores when no key is present — fine for demos.
+-
+-## License
+-
+-Private / proprietary unless otherwise noted.
++Admin competition auto-run / AI plane stay behind `NEXT_PUBLIC_ENABLE_ADMIN_SPRAWL=true` until this path is crisp.
+diff --git a/src/app/(app)/challenges/page.tsx b/src/app/(app)/challenges/page.tsx
+index 6082e72..ac01a27 100644
+--- a/src/app/(app)/challenges/page.tsx
++++ b/src/app/(app)/challenges/page.tsx
+@@ -3,6 +3,7 @@ import { getSessionUser, isPremium } from "@/server/auth/session";
+ import { Problemset } from "@/components/challenges/problemset";
+ import { isCodingProblem } from "@/server/challenges/coding-problems";
+ import { editorialSlugByChallengeSlug, resolveEditorialSlug } from "@/server/saas/editorials";
++import { SaveProgressCta } from "@/components/learn/save-progress-cta";
+ 
+ /** First paint only — full library is browsed via /api/challenges search + load more. */
+ const CODING_LIMIT = 80;
+@@ -40,7 +41,9 @@ export default async function ChallengesPage({
+   const sp = await searchParams;
+   const user = await getSessionUser();
+   const trackFilter = sp.track ? { track: sp.track as never } : {};
+-  const includeGenerated = sp.view === "generated" || sp.track === "generated";
++  // Generated volume bank is signed-in only (not for guests / marketing).
++  const wantGenerated = sp.view === "generated" || sp.track === "generated";
++  const includeGenerated = Boolean(user) && wantGenerated;
+   // Default first paint: hand-authored only (exclude procedural q-* / exp-* volume bank).
+   const coreOnly = includeGenerated
+     ? {}
+@@ -148,16 +151,20 @@ export default async function ChallengesPage({
+   const projects = rows.filter((r) => !isCodingProblem(r));
+ 
+   return (
+-    <Problemset
+-      problems={problems}
+-      projects={projects}
+-      initialMode={sp.view === "projects" ? "projects" : "problemset"}
+-      premium={isPremium(user)}
+-      libraryTotals={{ coding: codingTotal, projects: projectTotal }}
+-      libraryAllTotals={{ coding: codingAllTotal, projects: projectAllTotal }}
+-      includeGenerated={includeGenerated}
+-      difficultyCounts={difficultyCounts}
+-      trackFilter={sp.track && sp.track !== "generated" ? sp.track : null}
+-    />
++    <div className="space-y-4">
++      <SaveProgressCta guest={!user} />
++      <Problemset
++        problems={problems}
++        projects={projects}
++        initialMode={sp.view === "projects" ? "projects" : "problemset"}
++        premium={isPremium(user)}
++        libraryTotals={{ coding: codingTotal, projects: projectTotal }}
++        libraryAllTotals={{ coding: codingAllTotal, projects: projectAllTotal }}
++        includeGenerated={includeGenerated}
++        signedIn={Boolean(user)}
++        difficultyCounts={difficultyCounts}
++        trackFilter={sp.track && sp.track !== "generated" ? sp.track : null}
++      />
++    </div>
+   );
+ }
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index 1dfd6f2..f4e83e2 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -6,6 +6,7 @@ import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
+ import { buildLearnerGameState, guestLearnerGameState, LESSON_XP } from "@/server/learning/gamification";
+ import { ARCADE_GAMES } from "@/server/learning/arcade-games";
+ import { ProgressHero } from "@/components/learn/progress-hero";
++import { SaveProgressCta } from "@/components/learn/save-progress-cta";
+ import { WelcomeSignIn } from "@/components/auth/welcome-sign-in";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+@@ -48,6 +49,7 @@ export default async function LearnHubPage() {
+           </p>
+         </div>
+         <ProgressHero game={game} />
++        <SaveProgressCta guest={!user} />
+       </header>
+ 
+       {assigned.length > 0 && (
+diff --git a/src/app/(app)/pricing/page.tsx b/src/app/(app)/pricing/page.tsx
+index 50197b0..f5ffccb 100644
+--- a/src/app/(app)/pricing/page.tsx
++++ b/src/app/(app)/pricing/page.tsx
+@@ -5,12 +5,14 @@ import { stripeEnabled } from "@/server/saas/stripe";
+ 
+ export default async function PricingPage() {
+   const user = await getSessionUser();
++  const mockBilling = process.env.ALLOW_MOCK_BILLING === "true";
+   return (
+     <Suspense fallback={<div className="text-slate-600">Loading pricing…</div>}>
+       <PricingClient
+         premium={isPremium(user)}
+         planExpiresAt={user?.planExpiresAt?.toISOString() ?? null}
+         stripeConfigured={stripeEnabled()}
++        mockBilling={mockBilling}
+       />
+     </Suspense>
+   );
+diff --git a/src/app/(app)/workspace/[id]/page.tsx b/src/app/(app)/workspace/[id]/page.tsx
+index 36fa4c0..466a86e 100644
+--- a/src/app/(app)/workspace/[id]/page.tsx
++++ b/src/app/(app)/workspace/[id]/page.tsx
+@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
+ import { getSessionUser, canReview, isPremium } from "@/server/auth/session";
+ import { WorkspaceIde } from "@/components/workspace/ide";
+ import { isCodingProblem } from "@/server/challenges/coding-problems";
++import { getJudgeStatus } from "@/server/execution/judge-status";
+ 
+ export default async function WorkspacePage({ params }: { params: Promise<{ id: string }> }) {
+   const user = await getSessionUser();
+@@ -38,6 +39,8 @@ export default async function WorkspacePage({ params }: { params: Promise<{ id:
+   const publicRequirements = (challenge.publicRequirements as string[] | null) ?? [];
+   const hiddenRequirements = (challenge.hiddenRequirements as string[] | null) ?? [];
+ 
++  const judge = getJudgeStatus();
++
+   return (
+     <WorkspaceIde
+       workspaceId={workspace.id}
+@@ -45,6 +48,8 @@ export default async function WorkspacePage({ params }: { params: Promise<{ id:
+       title={workspace.assignment.assessment.title}
+       track={workspace.assignment.assessment.track}
+       language={workspace.language}
++      judgeOnline={judge.online}
++      judgeDetail={judge.detail}
+       files={workspace.files}
+       commits={workspace.commits.map((c) => ({
+         sha: c.sha,
+diff --git a/src/app/api/auth/register/route.ts b/src/app/api/auth/register/route.ts
+index a2a1cc8..abfdea5 100644
+--- a/src/app/api/auth/register/route.ts
++++ b/src/app/api/auth/register/route.ts
+@@ -53,7 +53,9 @@ export async function POST(req: Request) {
+     return jsonOk({
+       needsVerification: result.needsVerification,
+       email: result.email,
+-      message: "Check your email for a verification link to finish creating your account.",
++      message: result.needsVerification
++        ? "Check your email for a verification link to finish creating your account."
++        : "Account created — you’re signed in.",
+     });
+   });
+ }
+diff --git a/src/components/admin/admin-client.tsx b/src/components/admin/admin-client.tsx
+index d7594e2..24d0acf 100644
+--- a/src/components/admin/admin-client.tsx
++++ b/src/components/admin/admin-client.tsx
+@@ -326,16 +326,18 @@ export function AdminClient() {
+     }
+   }
+ 
++  // Competition / AI provider sprawl stays behind a flag until the core hiring loop is solid.
++  const sprawl = process.env.NEXT_PUBLIC_ENABLE_ADMIN_SPRAWL === "true";
+   const tabs: { id: Tab; label: string }[] = [
+     { id: "overview", label: "Overview" },
+     { id: "analytics", label: "Analytics" },
+-    { id: "competition", label: "Competition" },
++    ...(sprawl ? [{ id: "competition" as const, label: "Competition" }] : []),
+     { id: "users", label: "Users" },
+     { id: "assignments", label: "Assignments" },
+     { id: "library", label: "Library" },
+     { id: "integrity", label: "Integrity" },
+     { id: "jobs", label: "Execution" },
+-    { id: "ai", label: "AI providers" },
++    ...(sprawl ? [{ id: "ai" as const, label: "AI providers" }] : []),
+     { id: "audit", label: "Audit log" },
+     { id: "system", label: "System" },
+   ];
+@@ -348,8 +350,9 @@ export function AdminClient() {
+         <p className="font-mono text-xs tracking-[0.3em] text-orange-700">SUPER ADMIN</p>
+         <h1 className="mt-2 text-2xl font-semibold sm:text-3xl">Platform control plane</h1>
+         <p className="mt-2 max-w-3xl text-slate-600">
+-          Users, assignments, challenge library, execution queue, AI providers, audit trail, and system posture —
+-          everything needed to operate Crucible.
++          {sprawl
++            ? "Users, assignments, challenge library, execution queue, competition/AI plane, audit trail, and system posture."
++            : "Users, assignments, challenge library, execution queue, audit trail, and system posture. Core hiring loop: create → assign → complete → scorecard."}
+         </p>
+       </header>
+ 
+diff --git a/src/components/challenges/problemset.tsx b/src/components/challenges/problemset.tsx
+index 49ab55b..7870ba5 100644
+--- a/src/components/challenges/problemset.tsx
++++ b/src/components/challenges/problemset.tsx
+@@ -4,6 +4,7 @@ import Link from "next/link";
+ import { useRouter } from "next/navigation";
+ import { useCallback, useEffect, useMemo, useState } from "react";
+ import { toast } from "sonner";
++import { markGuestProgress } from "@/components/learn/save-progress-cta";
+ import { Badge } from "@/components/ui/badge";
+ import { Input } from "@/components/ui/input";
+ import { cn } from "@/lib/utils";
+@@ -88,6 +89,7 @@ export function Problemset(props: {
+   /** Full library size including procedural q-/exp- bank (for honesty badge). */
+   libraryAllTotals?: { coding: number; projects: number };
+   includeGenerated?: boolean;
++  signedIn?: boolean;
+   difficultyCounts?: Record<DifficultyBand, number>;
+   trackFilter?: string | null;
+ }) {
+@@ -256,6 +258,12 @@ export function Problemset(props: {
+   }
+ 
+   async function startProblem(p: ProblemRow) {
++    if (!props.signedIn) {
++      markGuestProgress();
++      toast.message("Create a free account to save this problem attempt");
++      router.push("/register?next=/challenges");
++      return;
++    }
+     if (Boolean(p.isPremium) && !props.premium) {
+       router.push("/pricing");
+       return;
+@@ -268,6 +276,12 @@ export function Problemset(props: {
+         body: JSON.stringify({ challengeId: p.id, language: lang }),
+       });
+       const json = await res.json();
++      if (res.status === 401 || res.status === 403) {
++        markGuestProgress();
++        toast.message("Create a free account to save this problem attempt");
++        router.push("/register?next=/challenges");
++        return;
++      }
+       if (!json.ok) throw new Error(json.error?.message || "Could not start");
+       toast.success(`Opened in ${CODING_LANGUAGE_LABELS[lang]}`);
+       router.push(`/workspace/${json.data.workspaceId}`);
+@@ -422,12 +436,19 @@ export function Problemset(props: {
+               <Link href="/challenges" className="text-xs font-medium text-orange-700 hover:underline">
+                 ← Back to hand-authored core
+               </Link>
+-            ) : (
++            ) : props.signedIn ? (
+               <Link
+                 href="/challenges?view=generated"
+                 className="text-xs font-medium text-slate-600 hover:text-orange-700 hover:underline"
+               >
+-                Include generated practice bank →
++                Practice volume (generated variants) →
++              </Link>
++            ) : (
++              <Link
++                href="/login?next=/challenges%3Fview%3Dgenerated"
++                className="text-xs font-medium text-slate-500 hover:underline"
++              >
++                Sign in for generated practice volume →
+               </Link>
+             )}
+           </div>
+diff --git a/src/components/learn/games/use-arcade-clear.ts b/src/components/learn/games/use-arcade-clear.ts
+index d5cb84a..1b74a15 100644
+--- a/src/components/learn/games/use-arcade-clear.ts
++++ b/src/components/learn/games/use-arcade-clear.ts
+@@ -3,6 +3,7 @@
+ import { useRouter } from "next/navigation";
+ import { useState } from "react";
+ import { toast } from "sonner";
++import { markGuestProgress } from "@/components/learn/save-progress-cta";
+ 
+ export function useArcadeClear(gameSlug: string) {
+   const router = useRouter();
+@@ -23,10 +24,19 @@ export function useArcadeClear(gameSlug: string) {
+         }),
+       });
+       const json = await res.json();
+-      if (!json.ok) throw new Error(json.error?.message || "Could not save");
++      if (!json.ok) {
++        if (res.status === 401 || res.status === 403) {
++          markGuestProgress();
++          setClearTick((n) => n + 1);
++          toast.message("Cleared as guest — sign in to save XP");
++          return { xpEarned: 0, firstClear: true };
++        }
++        throw new Error(json.error?.message || "Could not save");
++      }
+       const xp = Number(json.data?.xpEarned ?? 0);
+       setLastXp(xp);
+       setClearTick((n) => n + 1);
++      markGuestProgress();
+       if (xp > 0) toast.success(`Game cleared · +${xp} XP`);
+       else toast.success("Nice run — streak updated");
+       router.refresh();
+diff --git a/src/components/learn/lesson-player.tsx b/src/components/learn/lesson-player.tsx
+index 7433443..e7fd3af 100644
+--- a/src/components/learn/lesson-player.tsx
++++ b/src/components/learn/lesson-player.tsx
+@@ -7,6 +7,7 @@ import { toast } from "sonner";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+ import { LessonBody } from "@/components/learn/lesson-body";
++import { markGuestProgress } from "@/components/learn/save-progress-cta";
+ import { XpBurst } from "@/components/learn/xp-burst";
+ import { LESSON_XP } from "@/server/learning/gamification";
+ 
+@@ -42,7 +43,19 @@ export function LessonPlayer(props: {
+         body: JSON.stringify({ lessonSlug: props.slug, done: doneNext }),
+       });
+       const json = await res.json();
+-      if (!json.ok) throw new Error(json.error?.message || "Failed");
++      if (!json.ok) {
++        // Guests can't persist — still celebrate and nudge account creation.
++        if (res.status === 401 || res.status === 403) {
++          markGuestProgress();
++          setDone(doneNext);
++          if (doneNext) {
++            setCelebration({ xp: LESSON_XP });
++            toast.message("Lesson finished as guest — sign in to save XP");
++          }
++          return;
++        }
++        throw new Error(json.error?.message || "Failed");
++      }
+       setDone(doneNext);
+       const xp = Number(json.data?.xpEarned ?? 0);
+       if (doneNext && xp > 0) {
+@@ -52,6 +65,7 @@ export function LessonPlayer(props: {
+         toast.message(doneNext ? "Lesson marked complete" : "Marked incomplete");
+         if (!doneNext) setCelebration(null);
+       }
++      if (doneNext) markGuestProgress();
+       if (doneNext && props.nextSlug) {
+         // brief beat so celebration is visible
+         setTimeout(() => router.push(props.lessonHref(props.nextSlug!)), 700);
+diff --git a/src/components/learn/save-progress-cta.tsx b/src/components/learn/save-progress-cta.tsx
+new file mode 100644
+index 0000000..573c801
+--- /dev/null
++++ b/src/components/learn/save-progress-cta.tsx
+@@ -0,0 +1,69 @@
++"use client";
++
++import { useEffect, useState } from "react";
++import Link from "next/link";
++import { Button } from "@/components/ui/button";
++import { SignInModal } from "@/components/auth/sign-in-modal";
++
++const KEY = "crucible_guest_activity";
++
++/** After a guest finishes a lesson or arcade clear, nudge account creation. */
++export function SaveProgressCta({ guest }: { guest: boolean }) {
++  const [show, setShow] = useState(false);
++  const [signInOpen, setSignInOpen] = useState(false);
++
++  useEffect(() => {
++    if (!guest) return;
++    try {
++      const raw = sessionStorage.getItem(KEY);
++      if (raw === "1") setShow(true);
++    } catch {
++      /* ignore */
++    }
++    const onActivity = () => {
++      try {
++        sessionStorage.setItem(KEY, "1");
++      } catch {
++        /* ignore */
++      }
++      setShow(true);
++    };
++    window.addEventListener("crucible:guest-progress", onActivity);
++    return () => window.removeEventListener("crucible:guest-progress", onActivity);
++  }, [guest]);
++
++  if (!guest || !show) return null;
++
++  return (
++    <>
++      <section className="rounded-2xl border border-[var(--brand)]/40 bg-[var(--brand-soft)] px-4 py-4 sm:px-5">
++        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--brand)]">Save your progress</p>
++        <h2 className="mt-1 text-lg font-semibold text-slate-900">Nice start — create a free account</h2>
++        <p className="mt-1 text-sm text-slate-600">
++          Guest mode doesn’t keep XP or streaks. Sign in to save lessons, problem attempts, and your qualification
++          profile.
++        </p>
++        <div className="mt-3 flex flex-wrap gap-2">
++          <Link href="/register">
++            <Button>Create free account</Button>
++          </Link>
++          <Button variant="secondary" onClick={() => setSignInOpen(true)}>
++            Sign in
++          </Button>
++        </div>
++      </section>
++      <SignInModal open={signInOpen} onOpenChange={setSignInOpen} freeHref="/learn" />
++    </>
++  );
++}
++
++export function markGuestProgress() {
++  try {
++    sessionStorage.setItem(KEY, "1");
++  } catch {
++    /* ignore */
++  }
++  if (typeof window !== "undefined") {
++    window.dispatchEvent(new Event("crucible:guest-progress"));
++  }
++}
+diff --git a/src/components/marketing/landing.tsx b/src/components/marketing/landing.tsx
+index d78372b..9295747 100644
+--- a/src/components/marketing/landing.tsx
++++ b/src/components/marketing/landing.tsx
+@@ -4,42 +4,6 @@ import Link from "next/link";
+ import { ThemeToggle } from "@/components/layout/theme-toggle";
+ import { CrucibleLockup, CrucibleWordmark } from "@/components/brand/crucible-lockup";
+ 
+-function WorkspacePreview() {
+-  return (
+-    <div className="overflow-hidden rounded-xl border border-[#d7e3ee] bg-[#ffffff] shadow-[0_18px_40px_rgba(15,28,46,0.08)] dark:border-white/10 dark:bg-[#0d141c]/90 dark:shadow-black/50">
+-      <div className="flex items-center gap-1.5 border-b border-[#e2ebf2] px-3 py-2 dark:border-white/10">
+-        <span className="h-2 w-2 rounded-full bg-[#cbd5e1] dark:bg-white/25" />
+-        <span className="h-2 w-2 rounded-full bg-[#cbd5e1] dark:bg-white/25" />
+-        <span className="h-2 w-2 rounded-full bg-[#cbd5e1] dark:bg-white/25" />
+-        <span className="ml-2 font-mono text-[10px] text-[#94a3b8] dark:text-white/40">workspace preview</span>
+-      </div>
+-      <div className="grid grid-cols-[48px_1fr]">
+-        <div className="space-y-2 border-r border-[#e2ebf2] px-2 py-3 dark:border-white/10">
+-          {[1, 2, 3, 4, 5].map((n) => (
+-            <div
+-              key={n}
+-              className="h-1.5 rounded-full bg-[#e2e8f0] dark:bg-white/10"
+-              style={{ width: `${45 + (n % 3) * 16}%` }}
+-            />
+-          ))}
+-        </div>
+-        <div className="space-y-2 px-3 py-3">
+-          <div className="h-2 w-[70%] rounded-full bg-[var(--brand-flame)]/45" />
+-          <div className="h-2 w-[88%] rounded-full bg-[#e2e8f0] dark:bg-white/12" />
+-          <div className="h-2 w-[55%] rounded-full bg-[#e2e8f0] dark:bg-white/12" />
+-          <div className="h-2 w-[78%] rounded-full bg-[#e2e8f0] dark:bg-white/12" />
+-          <div className="h-2 w-[62%] rounded-full bg-amber-400/35" />
+-          <div className="h-2 w-[72%] rounded-full bg-[#e2e8f0] dark:bg-white/12" />
+-        </div>
+-      </div>
+-      <div className="flex items-center justify-between border-t border-[#e2ebf2] px-3 py-2 font-mono text-[10px] text-[#94a3b8] dark:border-white/10 dark:text-white/40">
+-        <span>illustrative</span>
+-        <span className="text-[var(--brand)] dark:text-[var(--brand-flame)]">not a live judge</span>
+-      </div>
+-    </div>
+-  );
+-}
+-
+ export function LandingPage(props: {
+   verifiedSkills?: number;
+   timedSessions?: number;
+@@ -57,9 +21,6 @@ export function LandingPage(props: {
+         <div className="pointer-events-none absolute inset-0" aria-hidden>
+           <div className="landing-hero-glow absolute inset-0" />
+           <div className="landing-noise absolute inset-0" />
+-          <div className="absolute bottom-[22%] right-10 top-28 hidden w-[min(400px,42vw)] sm:block lg:right-14">
+-            <WorkspacePreview />
+-          </div>
+         </div>
+ 
+         <header className="relative z-20 mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 px-4 py-3 safe-top sm:px-8 sm:py-5 lg:px-10">
+@@ -82,12 +43,8 @@ export function LandingPage(props: {
+           </div>
+         </header>
+ 
+-        <div className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 pb-8 pt-2 sm:px-8 sm:pb-20 sm:pt-6 lg:px-10">
+-          <div className="mb-4 sm:hidden">
+-            <WorkspacePreview />
+-          </div>
+-
+-          <div className="max-w-xl sm:mt-auto sm:max-w-md lg:max-w-xl">
++        <div className="relative z-10 mx-auto flex w-full max-w-[1200px] flex-1 flex-col justify-center px-4 pb-10 pt-6 sm:px-8 sm:pb-20 lg:px-10">
++          <div className="max-w-xl lg:max-w-2xl">
+             <p className="landing-anim-brand leading-[0.9]">
+               <CrucibleWordmark className="text-[clamp(2.75rem,12vw,7.5rem)] font-semibold" />
+             </p>
+@@ -95,7 +52,8 @@ export function LandingPage(props: {
+               Learn the craft. Hire the proof.
+             </h1>
+             <p className="landing-anim-copy mt-2 text-[14px] leading-relaxed text-[#5b7390] dark:text-white/55 sm:mt-3 sm:text-[15px]">
+-              Timed judges and real production work — one arena for engineers who practice and employers who hire.
++              Short lessons, a curated problem bank, and timed assessments with public + hidden tests — then a
++              qualification profile you can share.
+             </p>
+             <div className="landing-anim-cta mt-5 flex w-full flex-col gap-2 sm:mt-9 sm:flex-row sm:items-center sm:gap-3">
+               <Link
+@@ -108,15 +66,17 @@ export function LandingPage(props: {
+                 href="/learn"
+                 className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white/70 px-5 text-sm text-slate-800 transition hover:border-slate-400 hover:bg-white dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:border-white/35 dark:hover:bg-white/10 sm:min-h-12 sm:w-auto"
+               >
+-                Browse Learn as guest
+-              </Link>
+-              <Link
+-                href="/login?intent=hire"
+-                className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-transparent px-5 text-sm text-slate-600 underline-offset-4 transition hover:text-slate-900 hover:underline dark:text-white/70 dark:hover:text-white sm:min-h-12 sm:w-auto"
+-              >
+-                Hire with Crucible
++                Browse as guest
+               </Link>
+             </div>
++            <p className="landing-anim-copy mt-4 text-[11px] leading-relaxed text-slate-500 dark:text-white/40">
++              Demo seed data may appear on fresh installs. Hidden judging needs a Docker worker (
++              <code className="font-mono">JUDGE_ONLINE=true</code>).{" "}
++              <Link href="/login?intent=hire" className="underline-offset-2 hover:underline">
++                Hiring teams
++              </Link>
++              .
++            </p>
+           </div>
+         </div>
+       </section>
+@@ -126,11 +86,11 @@ export function LandingPage(props: {
+           <div>
+             <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--brand)]">For learners</p>
+             <h2 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-[-0.03em] text-slate-900 sm:text-[2rem]">
+-              A place to get better
++              Get interview-ready
+             </h2>
+             <p className="mt-4 max-w-md text-[15px] leading-relaxed text-slate-500">
+-              Daily sessions, a problem bank, study plans, and company-style mocks. Train under the same public + hidden
+-              harnesses used in assessments — then publish a qualification profile.
++              Interview Craft + AI Craft lessons, a hand-authored problem bank, and timed mocks. Pass public examples,
++              then the hidden harness when the judge is online.
+             </p>
+             <Link
+               href="/register"
+@@ -142,17 +102,17 @@ export function LandingPage(props: {
+           <div>
+             <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[var(--brand)]">For employers</p>
+             <h2 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-[-0.03em] text-slate-900 sm:text-[2rem]">
+-              A floor to test talent
++              Assign · review · scorecard
+             </h2>
+             <p className="mt-4 max-w-md text-[15px] leading-relaxed text-slate-500">
+-              Assign the work you care about. Watch candidates build in isolated workspaces, run hidden harnesses, and
+-              collect scorecards — humans still make the hire call.
++              Create an assessment, assign a candidate, review evidence, export a scorecard. Hiring surfaces stay lean
++              until that loop is solid.
+             </p>
+             <Link
+               href="/login?intent=hire"
+-              className="mt-8 inline-flex min-h-11 items-center text-sm font-medium text-amber-600 transition hover:text-amber-500"
++              className="mt-8 inline-flex min-h-11 items-center text-sm font-medium text-slate-600 transition hover:text-slate-900"
+             >
+-              Enter as hiring team →
++              Sign in as hiring team →
+             </Link>
+           </div>
+         </div>
+@@ -161,13 +121,14 @@ export function LandingPage(props: {
+       <section className="relative z-10 border-t border-slate-200 bg-[var(--background)]">
+         <div className="mx-auto flex max-w-[1200px] flex-col gap-6 px-4 py-12 sm:px-8 lg:flex-row lg:items-end lg:justify-between lg:px-10 lg:py-14">
+           <div>
+-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-slate-500">Sample seed</p>
++            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-slate-500">What you get</p>
+             <p className="mt-3 max-w-xl text-xl font-semibold leading-snug tracking-[-0.03em] text-slate-900 sm:text-[1.75rem]">
+-              {timed}-minute assessments · Docker hidden harness · human review
++              {timed}-minute assessments · curated problems · human review
+             </p>
+             <p className="mt-2 font-mono text-[11px] text-slate-500">
+-              Demo data: {skills} verified skill{skills === 1 ? "" : "s"} · {profiles} public{" "}
+-              {profiles === 1 ? "profile" : "profiles"}
++              {profiles > 0
++                ? `${profiles} sample public profile${profiles === 1 ? "" : "s"} · ${skills} verified skill marker${skills === 1 ? "" : "s"} in seed`
++                : "Fresh installs start empty until you seed or register"}
+             </p>
+           </div>
+           <Link
+@@ -178,30 +139,6 @@ export function LandingPage(props: {
+           </Link>
+         </div>
+       </section>
+-
+-      <section className="relative z-10 border-t border-slate-200 bg-slate-50/80">
+-        <div className="mx-auto grid max-w-[1200px] gap-10 px-4 py-14 sm:grid-cols-3 sm:px-8 lg:gap-12 lg:px-10 lg:py-20">
+-          {[
+-            {
+-              t: "Learn under pressure",
+-              d: "Sixty-minute sessions across SaaS, AppSec, SOC/IR, and secure full-stack — build, break, recover.",
+-            },
+-            {
+-              t: "One judge for both sides",
+-              d: "Public examples plus server-side hidden harnesses (Docker worker required). Without it, hidden suites fail closed.",
+-            },
+-            {
+-              t: "Hire on evidence",
+-              d: "Shareable qualification pages and scorecards. Assessment and human-review skills only — résumé claims stay claims.",
+-            },
+-          ].map((item) => (
+-            <div key={item.t}>
+-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-900">{item.t}</h2>
+-              <p className="mt-3 text-sm leading-relaxed text-slate-500">{item.d}</p>
+-            </div>
+-          ))}
+-        </div>
+-      </section>
+     </div>
+   );
+ }
+diff --git a/src/components/saas/pricing-client.tsx b/src/components/saas/pricing-client.tsx
+index bdb8e36..50b6222 100644
+--- a/src/components/saas/pricing-client.tsx
++++ b/src/components/saas/pricing-client.tsx
+@@ -12,6 +12,8 @@ export function PricingClient(props: {
+   premium: boolean;
+   planExpiresAt?: string | null;
+   stripeConfigured: boolean;
++  /** Local/demo only — never true in production without explicit ALLOW_MOCK_BILLING. */
++  mockBilling?: boolean;
+ }) {
+   const router = useRouter();
+   const params = useSearchParams();
+@@ -122,19 +124,27 @@ export function PricingClient(props: {
+                 Yearly · save more
+               </Button>
+             </div>
+-            <Button className="w-full" disabled={busy || props.premium} onClick={upgrade}>
+-              {props.premium
+-                ? "Already Premium"
+-                : busy
+-                  ? "Redirecting…"
+-                  : props.stripeConfigured
+-                    ? "Checkout with Stripe"
+-                    : "Enable demo Premium (no charge)"}
+-            </Button>
++            {props.stripeConfigured || props.mockBilling ? (
++              <Button className="w-full" disabled={busy || props.premium} onClick={upgrade}>
++                {props.premium
++                  ? "Already Premium"
++                  : busy
++                    ? "Redirecting…"
++                    : props.stripeConfigured
++                      ? "Checkout with Stripe"
++                      : "Enable demo Premium (no charge)"}
++              </Button>
++            ) : (
++              <Button className="w-full" disabled>
++                Premium checkout unavailable
++              </Button>
++            )}
+             <p className="text-xs text-slate-500">
+               {props.stripeConfigured
+                 ? "Secure Stripe Checkout. Webhooks activate Premium on payment."
+-                : "Stripe is not configured — this only flips your local plan flag. Set STRIPE_SECRET_KEY for real Checkout."}
++                : props.mockBilling
++                  ? "Demo billing only — set STRIPE_SECRET_KEY for real Checkout, or unset ALLOW_MOCK_BILLING in production."
++                  : "Stripe is not configured. Premium upgrades are disabled on this deployment."}
+             </p>
+           </CardContent>
+         </Card>
+diff --git a/src/components/workspace/ide.tsx b/src/components/workspace/ide.tsx
+index cde6c97..57c0922 100644
+--- a/src/components/workspace/ide.tsx
++++ b/src/components/workspace/ide.tsx
+@@ -149,10 +149,13 @@ export function WorkspaceIde(props: {
+   maxLevelReached?: number;
+   owaspMappings?: string[];
+   mitreMappings?: string[];
++  judgeOnline?: boolean;
++  judgeDetail?: string;
+ }) {
+   const router = useRouter();
+   const coding = Boolean(props.codingMode);
+   const premium = Boolean(props.premium);
++  const judgeOnline = props.judgeOnline === true;
+   const [debuggerOpen, setDebuggerOpen] = useState(false);
+   const [debugState, setDebugState] = useState<{
+     status: string;
+@@ -173,9 +176,14 @@ export function WorkspaceIde(props: {
+   const [activePath, setActivePath] = useState(preferred ?? props.files[0]?.path ?? "README.md");
+   const active = useMemo(() => files.find((f) => f.path === activePath), [files, activePath]);
+   const [commitMsg, setCommitMsg] = useState(coding ? "feat: solve coding problem" : "feat: progress on assessment");
+-  const [terminal, setTerminal] = useState(
+-    coding ? "Ready. Run public tests, then Submit for hidden evaluation.\n" : "Ready. Tests execute in an isolated worker/sandbox.\n",
+-  );
++  const [terminal, setTerminal] = useState(() => {
++    if (props.judgeOnline === true) {
++      return coding
++        ? "Ready. Run public tests, then Submit for hidden evaluation.\n"
++        : "Ready. Tests execute in an isolated worker/sandbox.\n";
++    }
++    return `Judge offline. ${props.judgeDetail ?? "Attach a Docker worker and set JUDGE_ONLINE=true."}\n`;
++  });
+   const [busy, setBusy] = useState(false);
+   const [caseResults, setCaseResults] = useState<CaseResult[]>([]);
+   const [judgeVerdict, setJudgeVerdict] = useState<{
+@@ -282,6 +290,10 @@ export function WorkspaceIde(props: {
+   }
+ 
+   async function run(type: "test" | "hidden_test" | "deploy_check") {
++    if (!judgeOnline) {
++      toast.error("Judge offline — Docker worker not attached");
++      return;
++    }
+     setBusy(true);
+     setTerminal((t) => t + `\n$ ${type === "test" ? "run" : type}\n`);
+     const res = await fetch(`/api/workspace/${props.workspaceId}/execute`, {
+@@ -367,6 +379,10 @@ export function WorkspaceIde(props: {
+   }, [latestTestJob?.id, latestTestJob?.stdout]);
+ 
+   async function submit() {
++    if (!judgeOnline) {
++      toast.error("Judge offline — Docker worker not attached");
++      return;
++    }
+     setBusy(true);
+     setTerminal((t) => t + `\n$ submit\n`);
+     setJudgeVerdict({
+@@ -581,12 +597,29 @@ export function WorkspaceIde(props: {
+               {props.problemSummary || "Implement the solution and pass public + hidden tests."}
+               {(props.companies?.length ?? 0) > 0 ? ` · Asked at ${props.companies!.slice(0, 3).join(", ")}` : ""}
+             </p>
++            {!judgeOnline && (
++              <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
++                <span className="font-semibold">Judge offline.</span>{" "}
++                {props.judgeDetail ?? "Attach a Docker worker and set JUDGE_ONLINE=true to enable Run / Submit."}
++              </p>
++            )}
+           </div>
+           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+-            <Button className="w-full sm:w-auto" variant="secondary" disabled={busy} onClick={() => run("test")}>
++            <Button
++              className="w-full sm:w-auto"
++              variant="secondary"
++              disabled={busy || !judgeOnline}
++              onClick={() => run("test")}
++              title={judgeOnline ? undefined : "Judge offline"}
++            >
+               {premium ? "Run · priority" : "Run"}
+             </Button>
+-            <Button className="w-full sm:w-auto" disabled={busy} onClick={submit}>
++            <Button
++              className="w-full sm:w-auto"
++              disabled={busy || !judgeOnline}
++              onClick={submit}
++              title={judgeOnline ? undefined : "Judge offline"}
++            >
+               Submit
+             </Button>
+             <Button
+@@ -909,18 +942,47 @@ export function WorkspaceIde(props: {
+             {props.problemSummary || "Mission brief · sandboxed evidence · adaptive grading"}
+             {props.timedMinutes ? ` · ${props.timedMinutes}-minute session` : ""}
+           </p>
++            {!judgeOnline && (
++              <p className="mt-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
++                <span className="font-semibold">Judge offline.</span>{" "}
++                {props.judgeDetail ?? "Attach a Docker worker and set JUDGE_ONLINE=true to enable Run / Submit."}
++              </p>
++            )}
+         </div>
+         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+-          <Button className="w-full sm:w-auto" variant="secondary" disabled={busy} onClick={() => run("test")}>
++          <Button
++            className="w-full sm:w-auto"
++            variant="secondary"
++            disabled={busy || !judgeOnline}
++            title={judgeOnline ? undefined : "Judge offline"}
++            onClick={() => run("test")}
++          >
+             Run tests
+           </Button>
+-          <Button className="w-full sm:w-auto" variant="secondary" disabled={busy} onClick={() => run("hidden_test")}>
++          <Button
++            className="w-full sm:w-auto"
++            variant="secondary"
++            disabled={busy || !judgeOnline}
++            title={judgeOnline ? undefined : "Judge offline"}
++            onClick={() => run("hidden_test")}
++          >
+             Hidden tests
+           </Button>
+-          <Button className="w-full sm:w-auto" variant="secondary" disabled={busy} onClick={() => run("deploy_check")}>
++          <Button
++            className="w-full sm:w-auto"
++            variant="secondary"
++            disabled={busy || !judgeOnline}
++            title={judgeOnline ? undefined : "Judge offline"}
++            onClick={() => run("deploy_check")}
++          >
+             Verify deploy
+           </Button>
+-          <Button className="col-span-2 w-full sm:col-span-1 sm:w-auto" disabled={busy} onClick={submit}>
++          <Button
++            className="col-span-2 w-full sm:col-span-1 sm:w-auto"
++            disabled={busy || !judgeOnline}
++            title={judgeOnline ? undefined : "Judge offline"}
++            onClick={submit}
++          >
+             Submit for evaluation
+           </Button>
+         </div>
+diff --git a/src/server/auth/email-verification.ts b/src/server/auth/email-verification.ts
+index 53993bc..131bf82 100644
+--- a/src/server/auth/email-verification.ts
++++ b/src/server/auth/email-verification.ts
+@@ -47,9 +47,45 @@ export async function startPasswordRegistration(opts: {
+     throw new AppError("Email already registered", 409, "EMAIL_TAKEN");
+   }
+ 
++  const passwordHash = await hashPassword(opts.password);
++
++  // Local/demo bypass — never enable on public production.
++  if (process.env.DEMO_SKIP_EMAIL_VERIFY === "true") {
++    const publicSlug = slugifyName(opts.name.trim());
++    const user = await prisma.user.create({
++      data: {
++        email,
++        name: opts.name.trim(),
++        passwordHash,
++        emailVerifiedAt: new Date(),
++        role: "CANDIDATE",
++        plan: "FREE",
++        candidateProfile: {
++          create: {
++            headline: "Candidate",
++            preferredTrack: opts.track,
++            publicSlug,
++            publicEnabled: false,
++            cybersecurity: opts.track === "CYBERSECURITY" ? ["interested"] : [],
++          },
++        },
++        streak: { create: { currentStreak: 0, longestStreak: 0 } },
++      },
++    });
++    await createSession(user.id, { ip: opts.ip });
++    await writeAudit({
++      actorId: user.id,
++      action: "auth.register.demo_bypass",
++      entityType: "User",
++      entityId: user.id,
++      metadata: { track: opts.track, publicSlug },
++      ip: opts.ip,
++    });
++    return { email, needsVerification: false as const, userId: user.id };
++  }
++
+   const token = randomBytes(32).toString("base64url");
+   const tokenHash = hashToken(token);
+-  const passwordHash = await hashPassword(opts.password);
+   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+ 
+   await prisma.pendingRegistration.upsert({
+diff --git a/src/server/bootstrap-seed.ts b/src/server/bootstrap-seed.ts
+index 4ad7310..1ef3e4f 100644
+--- a/src/server/bootstrap-seed.ts
++++ b/src/server/bootstrap-seed.ts
+@@ -1046,6 +1046,63 @@ export async function seedDatabase(opts?: { includeDemoAccounts?: boolean }) {
+     });
+   }
+ 
++  // Learner craft + arcade progress so ELITE demos aren't empty XP shells
++  {
++    const { INTERVIEW_CRAFT_PLAN_SLUG, INTERVIEW_LESSONS } = await import(
++      "@/server/learning/interview-curriculum"
++    );
++    const { AI_CRAFT_PLAN_SLUG, AI_LESSONS } = await import("@/server/learning/ai-curriculum");
++    const { ARCADE_PLAN_SLUG } = await import("@/server/learning/arcade-games");
++    const { dateKey } = await import("@/server/saas/daily");
++    const ivDone = INTERVIEW_LESSONS.map((l) => l.slug);
++    const aiDone = AI_LESSONS.slice(0, 8).map((l) => l.slug);
++    for (const row of [
++      { userId: candidate.id, planSlug: INTERVIEW_CRAFT_PLAN_SLUG, completedSlugs: ivDone },
++      { userId: candidate.id, planSlug: AI_CRAFT_PLAN_SLUG, completedSlugs: aiDone },
++      {
++        userId: candidate.id,
++        planSlug: ARCADE_PLAN_SLUG,
++        completedSlugs: ["framework-flow", "big-o-blitz", "pair-seeker", "binary-range"],
++      },
++      {
++        userId: cyberCandidate.id,
++        planSlug: INTERVIEW_CRAFT_PLAN_SLUG,
++        completedSlugs: ivDone.slice(0, 8),
++      },
++      {
++        userId: premiumCandidate.id,
++        planSlug: INTERVIEW_CRAFT_PLAN_SLUG,
++        completedSlugs: ivDone.slice(0, 10),
++      },
++    ]) {
++      await prisma.studyPlanEnrollment.upsert({
++        where: { userId_planSlug: { userId: row.userId, planSlug: row.planSlug } },
++        create: {
++          userId: row.userId,
++          planSlug: row.planSlug,
++          completedSlugs: row.completedSlugs,
++        },
++        update: { completedSlugs: row.completedSlugs },
++      });
++    }
++    for (const userId of [candidate.id, cyberCandidate.id, premiumCandidate.id]) {
++      await prisma.userStreak.upsert({
++        where: { userId },
++        create: {
++          userId,
++          currentStreak: 12,
++          longestStreak: 21,
++          lastDateKey: dateKey(new Date()),
++        },
++        update: {
++          currentStreak: 12,
++          longestStreak: 21,
++          lastDateKey: dateKey(new Date()),
++        },
++      });
++    }
++  }
++
+   // Ensure verified skills exist for public profiles
+   for (const row of [
+     { userId: candidate.id, name: "typescript", domain: "languages", source: "ASSESSMENT" as const },
+diff --git a/src/server/execution/judge-status.ts b/src/server/execution/judge-status.ts
+new file mode 100644
+index 0000000..eff4c29
+--- /dev/null
++++ b/src/server/execution/judge-status.ts
+@@ -0,0 +1,19 @@
++/**
++ * Judge is online only when an operator explicitly attaches a Docker worker.
++ * Vercel / Cursor Publish without a worker must stay offline (fail closed).
++ */
++export function isJudgeOnline() {
++  return process.env.JUDGE_ONLINE === "true";
++}
++
++export function getJudgeStatus() {
++  const online = isJudgeOnline();
++  return {
++    online,
++    mode: "docker" as const,
++    label: online ? "Judge online" : "Judge offline",
++    detail: online
++      ? "Docker worker attached — Run / Submit use the hidden harness."
++      : "Docker worker not attached. Run and Submit are disabled until JUDGE_ONLINE=true and a worker is running.",
++  };
++}
+-- 
+2.43.0
+
+
+From c2897c9245649f41dc1bbeaebe6c42079c129ad3 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 8 Nov 2026 17:28:35 +0000
+Subject: [PATCH 2/2] Publish-ready: CURSOR_APP_URL origin fallback and
+ PORT-aware start
+
+Stable hosts inject CURSOR_APP_URL; start listens on \$PORT for Cursor Publish.
+---
+ package.json                          | 2 +-
+ src/server/auth/email-verification.ts | 9 ++++++++-
+ src/server/security/origin.ts         | 1 +
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/package.json b/package.json
+index 59e9f5c..1a8268d 100644
+--- a/package.json
++++ b/package.json
+@@ -7,7 +7,7 @@
+     "dev:worker": "tsx worker/index.ts",
+     "build": "prisma generate && prisma migrate deploy && next build",
+     "postinstall": "prisma generate",
+-    "start": "next start -p 3847",
++    "start": "next start -H 0.0.0.0 -p ${PORT:-3847}",
+     "lint": "next lint",
+     "db:generate": "prisma generate",
+     "db:migrate": "prisma migrate dev",
+diff --git a/src/server/auth/email-verification.ts b/src/server/auth/email-verification.ts
+index 131bf82..9f70492 100644
+--- a/src/server/auth/email-verification.ts
++++ b/src/server/auth/email-verification.ts
+@@ -14,7 +14,14 @@ function hashToken(token: string) {
+ }
+ 
+ function appOrigin(req?: Request) {
+-  const fromEnv = process.env.APP_URL?.trim().replace(/\/$/, "");
++  const fromEnv = (
++    process.env.APP_URL ||
++    process.env.CURSOR_APP_URL ||
++    process.env.NEXT_PUBLIC_APP_URL ||
++    ""
++  )
++    .trim()
++    .replace(/\/$/, "");
+   if (fromEnv) return fromEnv;
+   if (req) {
+     const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+diff --git a/src/server/security/origin.ts b/src/server/security/origin.ts
+index 0495528..26bf033 100644
+--- a/src/server/security/origin.ts
++++ b/src/server/security/origin.ts
+@@ -7,6 +7,7 @@ export function assertSameOrigin(req: Request) {
+   const origin = req.headers.get("origin");
+   const app =
+     process.env.APP_URL?.replace(/\/$/, "") ||
++    process.env.CURSOR_APP_URL?.replace(/\/$/, "") ||
+     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+     "";
+ 
+-- 
+2.43.0
+

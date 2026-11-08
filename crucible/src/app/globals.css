@@ -1,0 +1,641 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Crucible brand tokens.
+  Slate/orange/amber scales invert semantically in .dark so existing
+  light-oriented utilities (text-slate-900, border-slate-200, bg-orange-50…)
+  stay readable without rewriting every page.
+*/
+
+:root {
+  --bg-0: #f7f4f1;
+  --bg-1: #f0ebe6;
+  --bg-2: #ffffff;
+  --line: #ddd4cb;
+  --text: #12141a;
+  --muted: #6b6570;
+  --accent: #ff5a1f;
+  --accent-2: #ff7a3d;
+  --danger: #e11d48;
+  --warning: #d97706;
+  --background: #f7f4f1;
+  --foreground: #12141a;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --brand: #ff5a1f;
+  --brand-hover: #ff7038;
+  --brand-soft: rgba(255, 90, 31, 0.12);
+  --brand-ink: #12141a;
+  --brand-flame: #ff5a1f;
+  /* Inline/fenced code chips — never use remapped slate/orange scales here */
+  --code-chip-bg: #ece8e4;
+  --code-chip-fg: #1a1512;
+  --code-chip-border: #d5cec6;
+  --code-block-bg: #141820;
+  --code-block-fg: #f3eee8;
+
+  --font-display: var(--font-ibm-sans), "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-serif: var(--font-ibm-serif), "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-ibm-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --slate-950: #020617;
+
+  --amber-50: #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+  --amber-800: #92400e;
+  --amber-900: #78350f;
+  --amber-950: #451a03;
+
+  --emerald-50: #ecfdf5;
+  --emerald-100: #d1fae5;
+  --emerald-200: #a7f3d0;
+  --emerald-300: #6ee7b7;
+  --emerald-400: #34d399;
+  --emerald-500: #10b981;
+  --emerald-600: #059669;
+  --emerald-700: #047857;
+  --emerald-800: #065f46;
+  --emerald-900: #064e3b;
+  --emerald-950: #022c22;
+
+  --orange-50: #fff4ef;
+  --orange-100: #ffe4d6;
+  --orange-200: #ffc4a8;
+  --orange-300: #ff9a66;
+  --orange-400: #ff7340;
+  --orange-500: #ff5a1f;
+  --orange-600: #e84a12;
+  --orange-700: #c43b0d;
+  --orange-800: #9a2f0f;
+  --orange-900: #7a2812;
+  --orange-950: #3f1208;
+
+  --rose-50: #fff1f2;
+  --rose-100: #ffe4e6;
+  --rose-200: #fecdd3;
+  --rose-300: #fda4af;
+  --rose-400: #fb7185;
+  --rose-500: #f43f5e;
+  --rose-600: #e11d48;
+  --rose-700: #be123c;
+  --rose-800: #9f1239;
+  --rose-900: #881337;
+  --rose-950: #4c0519;
+
+  --violet-50: #f5f3ff;
+  --violet-100: #ede9fe;
+  --violet-200: #ddd6fe;
+  --violet-300: #c4b5fd;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --violet-600: #7c3aed;
+  --violet-700: #6d28d9;
+  --violet-800: #5b21b6;
+  --violet-900: #4c1d95;
+  --violet-950: #2e1065;
+}
+
+.dark {
+  --bg-0: #07090d;
+  --bg-1: #0c1016;
+  --bg-2: #121820;
+  --line: #243246;
+  --text: #e8eef5;
+  --muted: #8b9cb3;
+  --accent: #ff7340;
+  --accent-2: #ff9a66;
+  --background: #07090d;
+  --foreground: #e8eef5;
+  --surface: #0c1016;
+  --surface-elevated: #121820;
+  --brand: #ff5a1f;
+  --brand-hover: #ff7340;
+  --brand-soft: rgba(255, 90, 31, 0.16);
+  --brand-ink: #f4f1ec;
+  --brand-flame: #ff5a1f;
+  --code-chip-bg: #1a2029;
+  --code-chip-fg: #ffc4a0;
+  --code-chip-border: #2a3340;
+  --code-block-bg: #0c1016;
+  --code-block-fg: #f3eee8;
+
+  /* Semantic remap: low numbers = surfaces, high numbers = ink */
+  --slate-50: #0c1016;
+  --slate-100: #121820;
+  --slate-200: #1c2430;
+  --slate-300: #2a3b4f;
+  --slate-400: #5b7390;
+  --slate-500: #8b9cb3;
+  --slate-600: #a8b8c9;
+  --slate-700: #c5d0dc;
+  --slate-800: #dde5ee;
+  --slate-900: #eef3f8;
+  --slate-950: #f8fafc;
+
+
+  --amber-50: rgba(251, 191, 36, 0.1);
+  --amber-100: rgba(251, 191, 36, 0.16);
+  --amber-200: rgba(251, 191, 36, 0.28);
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #fbbf24;
+  --amber-800: #fcd34d;
+  --amber-900: #fde68a;
+  --amber-950: #fffbeb;
+
+  /* Soft pastel fills become dark panels; high steps become readable ink */
+  --emerald-50: #121a18;
+  --emerald-100: #16201c;
+  --emerald-200: #1e2e28;
+  --emerald-300: #34d399;
+  --emerald-400: #6ee7b7;
+  --emerald-500: #34d399;
+  --emerald-600: #6ee7b7;
+  --emerald-700: #a7f3d0;
+  --emerald-800: #d1fae5;
+  --emerald-900: #ecfdf5;
+  --emerald-950: #f0fdf8;
+
+  --orange-50: rgba(255, 90, 31, 0.08);
+  --orange-100: rgba(255, 90, 31, 0.14);
+  --orange-200: rgba(255, 90, 31, 0.28);
+  --orange-300: #ff9a66;
+  --orange-400: #ff7340;
+  --orange-500: #ff5a1f;
+  --orange-600: #ff7340;
+  --orange-700: #ff9a66;
+  --orange-800: #ffc4a8;
+  --orange-900: #ffe4d6;
+  --orange-950: #fff4ef;
+
+  --rose-50: #1a1216;
+  --rose-100: #22161c;
+  --rose-200: #3a1c28;
+  --rose-300: #fb7185;
+  --rose-400: #fb7185;
+  --rose-500: #f43f5e;
+  --rose-600: #fb7185;
+  --rose-700: #fda4af;
+  --rose-800: #fecdd3;
+  --rose-900: #ffe4e6;
+  --rose-950: #fff1f2;
+
+  --violet-50: #16141f;
+  --violet-100: #1c1828;
+  --violet-200: #2a243c;
+  --violet-300: #a78bfa;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --violet-600: #a78bfa;
+  --violet-700: #c4b5fd;
+  --violet-800: #ddd6fe;
+  --violet-900: #ede9fe;
+  --violet-950: #f5f3ff;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+html {
+  overflow-x: clip;
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  color: var(--text);
+  background:
+    radial-gradient(1100px 560px at 12% -8%, rgba(255, 90, 31, 0.1), transparent 55%),
+    radial-gradient(900px 480px at 92% 0%, rgba(255, 122, 61, 0.08), transparent 50%),
+    radial-gradient(700px 380px at 50% 100%, rgba(255, 90, 31, 0.05), transparent 45%),
+    linear-gradient(180deg, #fcfaf8 0%, var(--bg-0) 42%, #f0ebe6 100%);
+  font-family: var(--font-display);
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.dark body,
+html.dark body {
+  background:
+    radial-gradient(900px 480px at 12% -12%, rgba(255, 90, 31, 0.1), transparent 55%),
+    linear-gradient(180deg, #090c11 0%, var(--bg-0) 48%, #05070a 100%);
+}
+
+/* Solid white surfaces → elevated ink panels in dark (keeps text-white intact) */
+.dark .bg-white {
+  background-color: var(--surface-elevated);
+}
+.dark .bg-white\/95 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 95%, transparent);
+}
+.dark .bg-white\/90 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 90%, transparent);
+}
+.dark .bg-white\/85 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 85%, transparent);
+}
+.dark .bg-white\/80 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 80%, transparent);
+}
+.dark .bg-white\/75 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 75%, transparent);
+}
+.dark .bg-white\/70 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+}
+.dark .bg-white\/60 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 60%, transparent);
+}
+.dark .bg-white\/50 {
+  background-color: color-mix(in srgb, var(--surface-elevated) 50%, transparent);
+}
+
+/* Pastel accent fills that still ship as default Tailwind colors */
+.dark .bg-emerald-50,
+.dark .bg-emerald-50\/70,
+.dark .bg-emerald-50\/80,
+.dark .bg-orange-50,
+.dark .bg-orange-50\/70,
+.dark .bg-orange-50\/80,
+.dark .bg-rose-50,
+.dark .bg-violet-50,
+.dark .bg-amber-50,
+.dark .bg-amber-50\/70 {
+  background-color: var(--surface-elevated) !important;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button,
+  a,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+}
+
+.mobile-bottom-pad {
+  /* Clear fixed tab bar + fixed CTA dock + home indicator */
+  padding-bottom: calc(14rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  .mobile-bottom-pad {
+    padding-bottom: 0;
+  }
+}
+
+/*
+ * Pin primary actions above the mobile tab bar.
+ * Fixed (not sticky): html/body overflow-x: clip breaks sticky in WebKit/Blink.
+ * Tab bar is ~3.75rem content + safe-area; dock sits just above it.
+ */
+.mobile-sticky-cta {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 35;
+  margin: 0 !important;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.28);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 1024px) {
+  .mobile-sticky-cta {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    margin: revert !important;
+    border-radius: revert;
+    border: revert;
+    box-shadow: none;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding-left: revert;
+    padding-right: revert;
+  }
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(14, 143, 159, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 143, 159, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+
+.dark .grid-overlay {
+  background-image:
+    linear-gradient(rgba(45, 212, 191, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 212, 191, 0.05) 1px, transparent 1px);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Opacity-only — transform creates a containing block that breaks position:fixed CTAs */
+.animate-rise {
+  animation: rise 0.5s ease-out both;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(14, 143, 159, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(14, 143, 159, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(14, 143, 159, 0);
+  }
+}
+
+.dark .pulse-live {
+  animation-name: pulse-ring-dark;
+}
+
+@keyframes pulse-ring-dark {
+  0% {
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(45, 212, 191, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0);
+  }
+}
+
+.pulse-live {
+  animation: pulse-ring 2.4s infinite;
+}
+
+/* Display headings — real IBM Plex Serif (see --font-ibm-serif on <body>). */
+.font-serif-display {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: -0.02em;
+}
+
+/* Landing — shared brand plane (light + dark) */
+.landing-root {
+  --landing-ink: var(--brand-ink);
+  --landing-mute: var(--muted);
+  --landing-line: color-mix(in srgb, var(--brand) 22%, transparent);
+  --landing-accent: var(--brand);
+  background:
+    radial-gradient(ellipse 90% 70% at 70% 18%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 8% 82%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 50%),
+    linear-gradient(165deg, #fcfaf8 0%, #f4efe9 48%, #ebe4dc 100%);
+  color: var(--landing-ink);
+}
+
+.dark .landing-root {
+  background: linear-gradient(180deg, #090c11 0%, #07090d 55%, #05070a 100%);
+}
+
+html:not(.dark) .landing-root {
+  background: linear-gradient(180deg, #fcfaf8 0%, #f4efe9 48%, #ebe4dc 100%);
+  color: var(--brand-ink);
+}
+
+.landing-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+}
+
+.dark .landing-noise {
+  opacity: 0.04;
+  mix-blend-mode: soft-light;
+}
+
+.landing-mesh {
+  background:
+    linear-gradient(color-mix(in srgb, var(--brand) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--brand) 5%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 80% 70% at 60% 40%, black 20%, transparent 75%);
+}
+
+@keyframes landing-fade-up {
+  from {
+    opacity: 0.35;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-2%, 1.5%);
+  }
+}
+
+@keyframes landing-plane-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-brand-in {
+  from {
+    opacity: 0.2;
+    transform: translateY(28px);
+    letter-spacing: -0.05em;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: -0.03em;
+  }
+}
+
+.landing-hero-plane {
+  background: #ffffff;
+  background-image: linear-gradient(180deg, #ffffff 0%, #faf7f4 58%, #f3eee8 100%);
+}
+
+.dark .landing-hero-plane {
+  background: #07090d;
+  background-image: linear-gradient(180deg, #0a0e14 0%, #07090d 100%);
+}
+
+.landing-hero-glow {
+  background:
+    radial-gradient(ellipse at 80% 0%, rgba(255, 90, 31, 0.12), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, transparent 55%);
+}
+
+.dark .landing-hero-glow {
+  background:
+    radial-gradient(ellipse at 80% 0%, rgba(255, 90, 31, 0.18), transparent 45%),
+    linear-gradient(180deg, #0b1118 0%, #07090d 60%, #05070a 100%);
+}
+
+.landing-hero-fade {
+  background: linear-gradient(
+    to top,
+    rgba(243, 248, 252, 0.92) 0%,
+    rgba(243, 248, 252, 0.45) 40%,
+    transparent 72%
+  );
+}
+
+.dark .landing-hero-fade {
+  background: linear-gradient(to top, rgba(7, 11, 17, 0.95) 0%, rgba(7, 11, 17, 0.4) 42%, transparent 75%);
+}
+
+.landing-anim-brand {
+  animation: landing-brand-in 1.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-anim-copy {
+  animation: landing-fade-up 1s cubic-bezier(0.22, 1, 0.36, 1) 0.14s both;
+}
+
+.landing-anim-cta {
+  animation: landing-fade-up 1s cubic-bezier(0.22, 1, 0.36, 1) 0.26s both;
+}
+
+.landing-anim-plane {
+  animation: landing-plane-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
+.landing-anim-ambient {
+  animation: landing-drift 18s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-anim-brand,
+  .landing-anim-copy,
+  .landing-anim-cta,
+  .landing-anim-plane,
+  .landing-anim-ambient {
+    animation: none !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--slate-300);
+  border-radius: 999px;
+}
+
+@keyframes xp-burst {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.96);
+  }
+}
+
+.xp-burst {
+  animation: xp-burst 1.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xp-burst {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Stamp mark inherits color; cut uses --mark-cut from the lockup */
