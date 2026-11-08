@@ -1,31 +1,23 @@
-# Crucible roast fixes (apply on Crucible, not Ai)
+# Crucible roast fixes (apply on Crucible)
 
-This Cloud Agent run is attached to **`auzzy370-wq/Ai`** and **cannot push** to `auzzy370-wq/Crucible` (`cursor[bot]` is denied write access there).
+This Cloud Agent cannot push to `auzzy370-wq/Crucible`. Patches live here for apply on that repo.
 
-The patch in `crucible-roast-fixes.patch` was developed against Crucible `main` @ `9964e1c`.
+## Patches
 
-## Apply on Crucible
+1. `crucible-roast-fixes.patch` — round 1 (landing, AI vs Human, judge fail-closed, catalog honesty, …)
+2. `crucible-roast-fixes-r3.patch` — round 3 (guest nav, wordmark, core bank default, profile craft honesty, landing copy)
+
+Apply in order on Crucible `main`:
 
 ```bash
-git clone git@github.com:auzzy370-wq/Crucible.git
 cd Crucible
 git checkout -b cursor/roast-fixes-8ab9
-git am path/to/crucible-roast-fixes.patch
-# or: git apply path/to/crucible-roast-fixes.patch && git commit ...
-npm install
-npx tsc --noEmit
+git am path/to/Ai/patches/crucible-roast-fixes.patch
+git am path/to/Ai/patches/crucible-roast-fixes-r3.patch
+npm install && npx tsc --noEmit
 git push -u origin cursor/roast-fixes-8ab9
 ```
 
-Or start a **new Cloud Agent on the Crucible repo** and tell it to apply this patch.
+## Live demo (ephemeral)
 
-## What it fixes
-
-1. **Homepage** — guests get the real marketing landing; signed-in users go to role home (`/learn` or `/dashboard`).
-2. **AI vs Human** — restores the client page (no longer a redirect stub); Compete nav + access rules.
-3. **Typography** — IBM Plex Serif for `.font-serif-display` / `--font-serif`.
-4. **Guest arcade XP** — today’s arcade task shows `ARCADE_CLEAR_XP` instead of 0.
-5. **Hidden judge fallback** — fail closed when Docker harness output is missing (no keyword/TODO grep passes).
-6. **Catalog honesty** — generated coding bank drops fake company tags; README/docs describe procedural fill vs hand-authored.
-7. **Jobs / Premium copy** — career-board aggregator and demo-Premium messaging made explicit.
-8. **PUBLIC_URL.md** — stop treating expired Cloudflare tunnels as the live site.
+When the agent VM is up: check the active Cloudflare quick tunnel. Prefer local `http://localhost:3847`.
