@@ -1,3 +1,85 @@
+-- Ensure Contest exists before ALTER (was missing from earlier migrations)
+CREATE TABLE IF NOT EXISTS "Contest" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "startsAt" TIMESTAMP(3) NOT NULL,
+    "endsAt" TIMESTAMP(3) NOT NULL,
+    "isPremium" BOOLEAN NOT NULL DEFAULT false,
+    "mode" TEXT NOT NULL DEFAULT 'HUMAN',
+    "status" TEXT NOT NULL DEFAULT 'SCHEDULED',
+    "bracketJson" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Contest_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "Contest_slug_key" ON "Contest"("slug");
+
+CREATE TABLE IF NOT EXISTS "ContestProblem" (
+    "id" TEXT NOT NULL,
+    "contestId" TEXT NOT NULL,
+    "challengeId" TEXT NOT NULL,
+    "ordinal" INTEGER NOT NULL DEFAULT 0,
+    "points" INTEGER NOT NULL DEFAULT 100,
+    CONSTRAINT "ContestProblem_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "ContestProblem_contestId_challengeId_key" ON "ContestProblem"("contestId", "challengeId");
+CREATE INDEX IF NOT EXISTS "ContestProblem_contestId_idx" ON "ContestProblem"("contestId");
+
+CREATE TABLE IF NOT EXISTS "ContestEntry" (
+    "id" TEXT NOT NULL,
+    "contestId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "score" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "solvedCount" INTEGER NOT NULL DEFAULT 0,
+    "penaltyMin" INTEGER NOT NULL DEFAULT 0,
+    "rank" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "ContestEntry_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "ContestEntry_contestId_userId_key" ON "ContestEntry"("contestId", "userId");
+CREATE INDEX IF NOT EXISTS "ContestEntry_contestId_score_idx" ON "ContestEntry"("contestId", "score");
+
+CREATE TABLE IF NOT EXISTS "WeeklyChallenge" (
+    "id" TEXT NOT NULL,
+    "weekKey" TEXT NOT NULL,
+    "challengeId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "synopsis" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "WeeklyChallenge_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "WeeklyChallenge_weekKey_key" ON "WeeklyChallenge"("weekKey");
+
+CREATE TABLE IF NOT EXISTS "WeeklyChallengeCompletion" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "weeklyChallengeId" TEXT NOT NULL,
+    "score" DOUBLE PRECISION,
+    "completedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "WeeklyChallengeCompletion_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "WeeklyChallengeCompletion_userId_weeklyChallengeId_key" ON "WeeklyChallengeCompletion"("userId", "weeklyChallengeId");
+CREATE INDEX IF NOT EXISTS "WeeklyChallengeCompletion_userId_idx" ON "WeeklyChallengeCompletion"("userId");
+
+CREATE TABLE IF NOT EXISTS "Editorial" (
+    "id" TEXT NOT NULL,
+    "challengeId" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "bodyMd" TEXT NOT NULL,
+    "approach" TEXT,
+    "complexity" TEXT,
+    "isPremium" BOOLEAN NOT NULL DEFAULT true,
+    "published" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Editorial_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "Editorial_slug_key" ON "Editorial"("slug");
+CREATE INDEX IF NOT EXISTS "Editorial_challengeId_idx" ON "Editorial"("challengeId");
+
 -- Competition platform: AI vs Human, Research Frontier, tournaments
 
 ALTER TABLE "Challenge" ADD COLUMN IF NOT EXISTS "calibratedDifficulty" INTEGER;

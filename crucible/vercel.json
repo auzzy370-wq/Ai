@@ -1,15 +1,23 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "prisma generate && if [ -n \"$DATABASE_URL_UNPOOLED\" ]; then DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" prisma migrate deploy; elif [ -n \"$DATABASE_URL\" ]; then prisma migrate deploy; else echo \"Skipping migrate (no DATABASE_URL)\"; fi && next build",
+  "buildCommand": "bash scripts/vercel-build.sh",
   "installCommand": "npm ci --include=dev",
-  "regions": ["iad1"],
+  "regions": [
+    "iad1"
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
       ]
     }
   ]

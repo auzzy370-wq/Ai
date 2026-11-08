@@ -25,3 +25,13 @@ Crucible remote push is denied for `cursor[bot]` — ship via this tree + Cursor
 # Bind: SESSION_SECRET, SETUP_SECRET (optional DEMO_SKIP_EMAIL_VERIFY for demos)
 # Do not set ALLOW_MOCK_BILLING or JUDGE_ONLINE on public hosts without Stripe/worker
 ```
+
+## Permanent Vercel URL (live)
+
+**https://crucible-arena-rho.vercel.app**
+
+- Team: `slop15` · Project: `crucible-arena`
+- Neon Postgres attached (`crucible-arena-db`)
+- SSO deployment protection disabled
+- Judge offline (`JUDGE_ONLINE` unset/false); mock billing off
+- Demo seed applied (hand-authored + volume bank in DB; UI defaults to core)
