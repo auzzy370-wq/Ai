@@ -1,0 +1,595 @@
+From edee912b89fbc563ff9c876cd5fb040040ee5872 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 8 Nov 2026 02:39:48 +0000
+Subject: [PATCH] Fix roast findings: landing, AI vs Human, honest catalog,
+ fail-closed judge
+
+Wire the marketing landing at /, restore AI vs Human, add Compete nav,
+use a real serif for display headings, show arcade XP for guests, fail
+closed when hidden harness output is missing, drop fake company tags on
+generated coding bank items, and document catalog generation honestly.
+---
+ README.md                              |  8 ++---
+ docs/PUBLIC_URL.md                     | 22 ++++++------
+ src/app/(app)/ai-vs-human/page.tsx     | 10 +++---
+ src/app/globals.css                    |  6 ++--
+ src/app/layout.tsx                     | 10 ++++--
+ src/app/page.tsx                       | 43 +++++++++++++++++++---
+ src/components/jobs/jobs-client.tsx    |  8 ++---
+ src/components/layout/app-shell.tsx    | 15 +++++++-
+ src/components/marketing/landing.tsx   | 12 +++++--
+ src/components/saas/pricing-client.tsx |  4 +--
+ src/lib/access.ts                      |  4 +++
+ src/lib/saas.ts                        | 30 +++++++---------
+ src/server/challenges/catalog-bulk.ts  |  3 +-
+ src/server/challenges/catalog.ts       | 11 +++++-
+ src/server/challenges/coding-bulk.ts   | 14 ++++----
+ src/server/execution/runner.ts         | 49 +++++++++++++-------------
+ src/server/learning/gamification.ts    |  2 +-
+ 17 files changed, 162 insertions(+), 89 deletions(-)
+
+diff --git a/README.md b/README.md
+index 6e37cf8..7be92b0 100644
+--- a/README.md
++++ b/README.md
+@@ -2,11 +2,11 @@
+ 
+ **Release 1.4** — **Learn the craft. Hire the proof.** Elite **AI vs Human** competition & benchmarking on the same objectively judged challenges (D1–D10 Research Frontier).
+ 
+-Crucible is a **learning arena**, **employer testing floor**, and **human × AI competition platform**. Engineers and models solve identical public statements; hidden suites stay server-side. Coding judges in **TypeScript, JavaScript, Python, Go, Rust, and Java**. Résumés claim. **Crucible verifies.**
++Crucible is a **learning arena**, **employer testing floor**, and **human × AI competition platform**. Engineers and models solve identical public statements; hidden suites stay server-side when `EXECUTION_MODE=docker` and a worker are attached. Coding judges in **TypeScript, JavaScript, Python, Go, Rust, and Java**. Without Docker, hidden suites **fail closed** (no keyword-grep passes). Résumés claim. **Crucible verifies when the harness runs.**
+ 
+ Competition surfaces: `/tournaments`, `/leaderboards`, `/ai-vs-human`, `/research-frontier`, `/benchmarks`. Plan: [docs/COMPETITION_PLATFORM_PLAN.md](docs/COMPETITION_PLATFORM_PLAN.md).
+ 
+-The seed loads the **full challenge library as published 60-minute assessments** with demo assignments, workspaces, and tests already placed. See [docs/RELEASE.md](docs/RELEASE.md).
++The seed loads the challenge library as published timed assessments with demo assignments, workspaces, and tests already placed. See [docs/RELEASE.md](docs/RELEASE.md).
+ 
+ ## Learning
+ 
+@@ -18,12 +18,12 @@ The seed loads the **full challenge library as published 60-minute assessments**
+ | **AI Craft** | `/learn/ai` | Prompting, APIs, tools, RAG, agents, evals, safety |
+ | **Study plans** | `/study-plans` | Company and role problem lists; each solved problem earns XP |
+ | **Company mocks** | `/interview` | Phone / coding / onsite rounds, briefings, 1 free mock then Premium |
+-| **Jobs** | `/jobs` | Live eng openings from Google, Amazon, Meta, and the rest of the company list — Apply opens the official posting |
++| **Jobs** | `/jobs` | Aggregated official career-board links (not Crucible-hosted applications) |
+ | **Roadmap** | `/roadmap` | Skill tree + next problems |
+ 
+ ## Tracks
+ 
+-Each track ships **≥250 project missions** plus a shared **4,000-question coding bank** scaling **Easy → Impossible**, with post-test **knowledge pinpoint** (exactly which skills were proven vs gaps).
++**Hand-authored** project + coding challenges ship in the core catalog. The seed also **procedurally expands** each track toward ~250 project slots (topic variants) and a **~4,000-item generated coding bank** (family templates × N, Easy → Impossible) for volume practice. Generated items are tagged `generated` and do **not** claim to be real company interview transcripts. Post-test **knowledge pinpoint** records which skills were proven vs gaps when harnesses run.
+ 
+ ### Core
+ | Track | Focus |
+diff --git a/docs/PUBLIC_URL.md b/docs/PUBLIC_URL.md
+index 2921595..892ab71 100644
+--- a/docs/PUBLIC_URL.md
++++ b/docs/PUBLIC_URL.md
+@@ -1,21 +1,21 @@
+ # Public site URL
+ 
+-**Live demo tunnel (HTTPS):**
++Quick Cloudflare tunnels are **temporary** and often expire. Do not treat a stale `*.trycloudflare.com` host as the product.
+ 
+-**https://friendship-won-platform-cats.trycloudflare.com**
++**Preferred local URL:** `http://localhost:3847` after `npm run dev`.
+ 
+-- Learn hub: `/learn`
+-- Learn Arcade: `/learn/games`
+-- Study plans: `/study-plans`
+-- Mock interviews: `/interview`
+-- Register any email (not `@crucible.local`) or use a seeded demo account when `DEMO_*` passwords are set locally
++**Preferred durable URL:** Cursor Publish (or your own Vercel/custom domain) with `APP_URL` / `NEXT_PUBLIC_APP_URL` set to that HTTPS origin.
+ 
+-Quick tunnels are temporary. Prefer **Cursor Publish** for a stable multi-user URL once confirmed.
++If you spin up a new quick tunnel for a demo:
++
++1. Put the HTTPS origin here for the active session only.
++2. Keep `allowedDevOrigins` including `*.trycloudflare.com` so Next assets load through the tunnel.
++3. Set `APP_URL` / `NEXT_PUBLIC_APP_URL` to the active public HTTPS origin so cookies and redirects work.
+ 
+ Do **not** use expired `*.tmp.now` Vercel links — they lack the real judge stack.
+ 
+ ## Agent rules
+ 
+-1. Prefer Cursor Publish for durable access; use `*.trycloudflare.com` for demos.
+-2. Keep `allowedDevOrigins` including `*.trycloudflare.com` so Next assets load through the tunnel.
+-3. Set `APP_URL` / `NEXT_PUBLIC_APP_URL` to the active public HTTPS origin so cookies and redirects work.
++1. Prefer Cursor Publish for durable access; use `*.trycloudflare.com` only for short demos.
++2. If a documented tunnel returns 5xx or times out, assume it is dead — run locally or republish.
++3. Never claim a tunnel is “the live site” without verifying it responds.
+diff --git a/src/app/(app)/ai-vs-human/page.tsx b/src/app/(app)/ai-vs-human/page.tsx
+index fb23c3f..8b215f6 100644
+--- a/src/app/(app)/ai-vs-human/page.tsx
++++ b/src/app/(app)/ai-vs-human/page.tsx
+@@ -1,6 +1,8 @@
+-import { redirect } from "next/navigation";
++import { CANDIDATE_ROLES, STAFF_ROLES } from "@/lib/access";
++import { requirePageRoles } from "@/server/auth/page-guard";
++import { AiVsHumanClient } from "@/components/competition/ai-vs-human-client";
+ 
+-/** Removed from product nav — keep URL from 404ing old bookmarks. */
+-export default function AiVsHumanRemoved() {
+-  redirect("/leaderboards");
++export default async function AiVsHumanPage() {
++  await requirePageRoles([...CANDIDATE_ROLES, ...STAFF_ROLES]);
++  return <AiVsHumanClient />;
+ }
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 9dc853d..751635f 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -37,7 +37,7 @@
+   --code-block-fg: #f3eee8;
+ 
+   --font-display: var(--font-ibm-sans), "IBM Plex Sans", "Segoe UI", sans-serif;
+-  --font-serif: var(--font-ibm-sans), "IBM Plex Sans", "Segoe UI", sans-serif;
++  --font-serif: var(--font-ibm-serif), "IBM Plex Serif", Georgia, "Times New Roman", serif;
+   --font-mono: var(--font-ibm-mono), "IBM Plex Mono", ui-monospace, monospace;
+ 
+   --slate-50: #f8fafc;
+@@ -439,9 +439,9 @@ html.dark body {
+   animation: pulse-ring 2.4s infinite;
+ }
+ 
+-/* Kept class name for existing call sites — uses normal UI sans, not decorative serif. */
++/* Display headings — real IBM Plex Serif (see --font-ibm-serif on <body>). */
+ .font-serif-display {
+-  font-family: var(--font-display);
++  font-family: var(--font-serif);
+   font-weight: 600;
+   font-style: normal;
+   letter-spacing: -0.02em;
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 5791034..f6ffb4f 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -1,5 +1,5 @@
+ import type { Metadata } from "next";
+-import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
++import { IBM_Plex_Sans, IBM_Plex_Mono, IBM_Plex_Serif } from "next/font/google";
+ import { ExtensionHydrationGuard } from "@/components/layout/extension-hydration-guard";
+ import { Providers } from "@/components/layout/providers";
+ import { ThemeToaster } from "@/components/layout/theme-toaster";
+@@ -11,6 +11,12 @@ const sans = IBM_Plex_Sans({
+   variable: "--font-ibm-sans",
+ });
+ 
++const serif = IBM_Plex_Serif({
++  subsets: ["latin"],
++  weight: ["400", "500", "600", "700"],
++  variable: "--font-ibm-serif",
++});
++
+ const mono = IBM_Plex_Mono({
+   subsets: ["latin"],
+   weight: ["400", "500", "600"],
+@@ -38,7 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
+   return (
+     <html lang="en" suppressHydrationWarning>
+       <body
+-        className={`${sans.variable} ${mono.variable} antialiased`}
++        className={`${sans.variable} ${serif.variable} ${mono.variable} antialiased`}
+         suppressHydrationWarning
+       >
+         <ExtensionHydrationGuard />
+diff --git a/src/app/page.tsx b/src/app/page.tsx
+index 79674a6..3090598 100644
+--- a/src/app/page.tsx
++++ b/src/app/page.tsx
+@@ -1,13 +1,48 @@
+ import { redirect } from "next/navigation";
++import { LandingPage } from "@/components/marketing/landing";
++import { homeForRole } from "@/lib/access";
++import { prisma } from "@/lib/db";
+ import { getSessionUser } from "@/server/auth/session";
+ 
+-/** Signed-in users go home; everyone else lands on the free Learn page. */
++/** Guests see the marketing landing; signed-in users go to their role home. */
+ export default async function Home() {
+   try {
+     const user = await getSessionUser();
+-    if (user) redirect("/dashboard");
++    if (user) redirect(homeForRole(user.role));
+   } catch {
+-    /* db/session unavailable — still send guests to Learn */
++    /* db/session unavailable — still show landing */
+   }
+-  redirect("/learn?welcome=1");
++
++  let verifiedSkills = 0;
++  let publicProfiles = 0;
++  let sampleProfileSlug = "casey-elite";
++  try {
++    const [skillCount, profileCount, sample] = await Promise.all([
++      prisma.skillRecord.count({
++        where: { source: { in: ["ASSESSMENT", "HUMAN_REVIEW"] } },
++      }),
++      prisma.candidateProfile.count({
++        where: { publicSlug: { not: null }, publicEnabled: true },
++      }),
++      prisma.candidateProfile.findFirst({
++        where: { publicSlug: { not: null }, publicEnabled: true },
++        select: { publicSlug: true },
++        orderBy: { updatedAt: "desc" },
++      }),
++    ]);
++    verifiedSkills = skillCount;
++    publicProfiles = profileCount;
++    if (sample?.publicSlug) sampleProfileSlug = sample.publicSlug;
++  } catch {
++    /* empty stats if DB is down */
++  }
++
++  return (
++    <LandingPage
++      verifiedSkills={verifiedSkills}
++      timedSessions={60}
++      publicProfiles={publicProfiles}
++      sampleProfileSlug={sampleProfileSlug}
++    />
++  );
+ }
+diff --git a/src/components/jobs/jobs-client.tsx b/src/components/jobs/jobs-client.tsx
+index c115022..56ee21e 100644
+--- a/src/components/jobs/jobs-client.tsx
++++ b/src/components/jobs/jobs-client.tsx
+@@ -70,13 +70,13 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+   return (
+     <div className="animate-rise space-y-6">
+       <header className="rounded-2xl border border-[var(--brand)]/30 bg-[var(--surface-elevated)] p-5 sm:p-7">
+-        <p className="font-mono text-xs tracking-[0.3em] text-[var(--brand)]">JOB BOARD</p>
++        <p className="font-mono text-xs tracking-[0.3em] text-[var(--brand)]">CAREER LINKS</p>
+         <h1 className="mt-2 font-serif-display text-2xl text-slate-900 sm:text-3xl">
+-          Tier-company roles. Official apply links.
++          Official openings from company career boards
+         </h1>
+         <p className="mt-2 max-w-2xl text-slate-600">
+-          Live engineering openings from your company list — Google, Amazon, Meta, and the rest. Apply on the
+-          employer&apos;s posting; prep here with a matching mock.
++          Aggregated public postings (Greenhouse and company career sites) — not Crucible-hosted applications.
++          Apply on the employer&apos;s page; prep here with a matching mock.
+         </p>
+         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+           <Briefcase className="h-3.5 w-3.5" />
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index 0c88284..0ab46c1 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -21,6 +21,9 @@ import {
+   UserRound,
+   BarChart3,
+   Briefcase,
++  Swords,
++  Trophy,
++  FlaskConical,
+   type LucideIcon,
+ } from "lucide-react";
+ import { cn } from "@/lib/utils";
+@@ -54,10 +57,20 @@ const NAV_GROUPS: NavGroup[] = [
+       { href: "/learn", label: "Learn", icon: BookOpen, hint: "Lessons, today’s goals, arcade" },
+       { href: "/challenges", label: "Practice", icon: Boxes, hint: "Problems & study plans" },
+       { href: "/interview", label: "Mocks", icon: Timer, hint: "Timed company rounds" },
+-      { href: "/jobs", label: "Jobs", icon: Briefcase, hint: "Open roles" },
++      { href: "/jobs", label: "Jobs", icon: Briefcase, hint: "Official career board links" },
+       { href: "/candidates", label: "Profile", icon: UserRound, hint: "Your progress & public page" },
+     ],
+   },
++  {
++    id: "compete",
++    title: "Compete",
++    roles: ["CANDIDATE", "TEAM_MEMBER"],
++    items: [
++      { href: "/ai-vs-human", label: "AI vs Human", icon: Swords, hint: "Same challenges, both sides" },
++      { href: "/leaderboards", label: "Leaderboards", icon: Trophy, hint: "Global rankings" },
++      { href: "/tournaments", label: "Tournaments", icon: FlaskConical, hint: "Timed heats" },
++    ],
++  },
+   {
+     id: "team-member",
+     title: "Your team",
+diff --git a/src/components/marketing/landing.tsx b/src/components/marketing/landing.tsx
+index b1092cb..375a521 100644
+--- a/src/components/marketing/landing.tsx
++++ b/src/components/marketing/landing.tsx
+@@ -105,8 +105,14 @@ export function LandingPage(props: {
+                 Start learning free
+               </Link>
+               <Link
+-                href="/login?intent=hire"
++                href="/learn"
+                 className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white/70 px-5 text-sm text-slate-800 transition hover:border-slate-400 hover:bg-white dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:border-white/35 dark:hover:bg-white/10 sm:min-h-12 sm:w-auto"
++              >
++                Browse Learn as guest
++              </Link>
++              <Link
++                href="/login?intent=hire"
++                className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-transparent px-5 text-sm text-slate-600 underline-offset-4 transition hover:text-slate-900 hover:underline dark:text-white/70 dark:hover:text-white sm:min-h-12 sm:w-auto"
+               >
+                 Hire with Crucible
+               </Link>
+@@ -123,8 +129,8 @@ export function LandingPage(props: {
+               A place to get better
+             </h2>
+             <p className="mt-4 max-w-md text-[15px] leading-relaxed text-slate-500">
+-              Daily sessions, a deep problem bank, study plans, and company-style mocks. Train under the same judges
+-              employers trust — then publish a verified profile.
++              Daily sessions, a problem bank, study plans, and company-style mocks. Train under the same public + hidden
++              harnesses used in assessments — then publish a qualification profile.
+             </p>
+             <Link
+               href="/register"
+diff --git a/src/components/saas/pricing-client.tsx b/src/components/saas/pricing-client.tsx
+index fa6892b..bdb8e36 100644
+--- a/src/components/saas/pricing-client.tsx
++++ b/src/components/saas/pricing-client.tsx
+@@ -129,12 +129,12 @@ export function PricingClient(props: {
+                   ? "Redirecting…"
+                   : props.stripeConfigured
+                     ? "Checkout with Stripe"
+-                    : "Upgrade to Premium"}
++                    : "Enable demo Premium (no charge)"}
+             </Button>
+             <p className="text-xs text-slate-500">
+               {props.stripeConfigured
+                 ? "Secure Stripe Checkout. Webhooks activate Premium on payment."
+-                : "Demo mode — activates instantly. Set STRIPE_SECRET_KEY for real Checkout."}
++                : "Stripe is not configured — this only flips your local plan flag. Set STRIPE_SECRET_KEY for real Checkout."}
+             </p>
+           </CardContent>
+         </Card>
+diff --git a/src/lib/access.ts b/src/lib/access.ts
+index 0698018..d41b0e5 100644
+--- a/src/lib/access.ts
++++ b/src/lib/access.ts
+@@ -56,6 +56,10 @@ export const PAGE_ROLE_ACCESS: { prefix: string; roles: readonly string[] }[] =
+     prefix: "/leaderboards",
+     roles: [...CANDIDATE_ROLES, ...STAFF_ROLES],
+   },
++  {
++    prefix: "/ai-vs-human",
++    roles: [...CANDIDATE_ROLES, ...STAFF_ROLES],
++  },
+   {
+     prefix: "/tournaments",
+     roles: [...CANDIDATE_ROLES, ...STAFF_ROLES],
+diff --git a/src/lib/saas.ts b/src/lib/saas.ts
+index a8312a6..dd5c797 100644
+--- a/src/lib/saas.ts
++++ b/src/lib/saas.ts
+@@ -1,47 +1,43 @@
+ export const PREMIUM_FEATURES = [
+   {
+     id: "company-questions",
+-    title: "Company-tagged evidence sessions",
+-    blurb:
+-      "Prioritize timed sessions by company tags, frequency, and time — craft practice that maps to what teams actually ask.",
++    title: "Company-tagged practice",
++    blurb: "Filter timed sessions by company tags and estimated frequency.",
+   },
+   {
+     id: "lightning-judge",
+     title: "Lightning Judge",
+-    blurb:
+-      "Priority public + hidden judging so your evidence loop stays fast when the queue is busy.",
++    blurb: "Higher priority in the Docker judge queue when workers are busy.",
+   },
+   {
+     id: "premium-content",
+-    title: "Premium craft content",
+-    blurb:
+-      "Exclusive missions, deeper editorials, and premium harness packs — after the judge signal is solid.",
++    title: "Premium content",
++    blurb: "Extra missions, editorials, and harness packs marked Premium.",
+   },
+   {
+     id: "autocomplete",
+     title: "Autocomplete",
+-    blurb: "Language-aware completion in the evidence IDE — speed without hiding ownership of the craft.",
++    blurb: "Language-aware completions in the workspace editor (provider key required).",
+   },
+   {
+     id: "debugger",
+     title: "Debugger",
+-    blurb: "Breakpoints and interactive debug in the workspace — not just print statements.",
++    blurb: "Interactive debug helpers in the workspace — beyond print statements.",
+   },
+   {
+     id: "interview-sims",
+-    title: "Timed company sessions",
+-    blurb:
+-      "Company-tagged timed workspaces with the same public + hidden judge bar as assessments.",
++    title: "Timed company mocks",
++    blurb: "Company-tagged timed rounds using the same public + hidden judge path as assessments.",
+   },
+   {
+     id: "cloud-storage",
+-    title: "Cloud Storage",
+-    blurb: "Code and layouts save to the cloud so evidence sessions continue across devices.",
++    title: "Cloud storage",
++    blurb: "Workspace files sync so sessions continue across devices.",
+   },
+   {
+     id: "unlimited-playgrounds",
+-    title: "Unlimited Playgrounds",
+-    blurb: "Create unlimited playgrounds and keep them organized with folders.",
++    title: "Unlimited playgrounds",
++    blurb: "Create unlimited playgrounds and organize them with folders.",
+   },
+ ] as const;
+ 
+diff --git a/src/server/challenges/catalog-bulk.ts b/src/server/challenges/catalog-bulk.ts
+index f05604e..f97f89b 100644
+--- a/src/server/challenges/catalog-bulk.ts
++++ b/src/server/challenges/catalog-bulk.ts
+@@ -36,7 +36,8 @@ function buildFromTopics(
+ ): ChallengeSeed[] {
+   const out: ChallengeSeed[] = [];
+   let i = 0;
+-  // Cycle topics with variant suffixes until we fill target slots for this track
++  // Procedural fill: reuse sector topics with -vN suffixes until this track hits `target`.
++  // These are volume practice shells, not unique hand-authored missions.
+   while (out.length < target) {
+     const t = topics[i % topics.length]!;
+     const variant = Math.floor(i / topics.length);
+diff --git a/src/server/challenges/catalog.ts b/src/server/challenges/catalog.ts
+index f519531..e34b2a7 100644
+--- a/src/server/challenges/catalog.ts
++++ b/src/server/challenges/catalog.ts
+@@ -1043,13 +1043,22 @@ const PROJECT_CATALOG: ChallengeSeed[] = [
+ const BASE_CATALOG: ChallengeSeed[] = [...PROJECT_CATALOG, ...CODING_PROBLEM_CATALOG];
+ 
+ const slugSet = new Set(BASE_CATALOG.map((c) => c.slug));
++/** Procedural fill so each track reaches ~250 slots (variants of sector topics, not unique hand-authored briefs). */
+ const EXPANDED_PROJECTS = buildExpandedCatalog(BASE_CATALOG, 250);
+ for (const c of EXPANDED_PROJECTS) slugSet.add(c.slug);
++/** Procedural coding bank for volume practice (family templates × N). */
+ const CODING_BANK = buildCodingBulk(4000, slugSet);
+ 
+-/** Full library: hand-authored + 250/track missions + 4000 coding questions (Easy→Impossible). */
++/** Full library: hand-authored core + generated project fill + generated coding bank. */
+ export const CHALLENGE_CATALOG: ChallengeSeed[] = [...BASE_CATALOG, ...EXPANDED_PROJECTS, ...CODING_BANK];
+ 
++export const CATALOG_STATS = {
++  handAuthored: BASE_CATALOG.length,
++  generatedProjects: EXPANDED_PROJECTS.length,
++  generatedCoding: CODING_BANK.length,
++  total: BASE_CATALOG.length + EXPANDED_PROJECTS.length + CODING_BANK.length,
++} as const;
++
+ /** Hand-authored only — demo workspace provisioning (not thousands of workspaces). */
+ export const SEED_WORKSPACE_CATALOG: ChallengeSeed[] = BASE_CATALOG;
+ 
+diff --git a/src/server/challenges/coding-bulk.ts b/src/server/challenges/coding-bulk.ts
+index a1731c8..ce2cde6 100644
+--- a/src/server/challenges/coding-bulk.ts
++++ b/src/server/challenges/coding-bulk.ts
+@@ -10,8 +10,7 @@ type Family = {
+   prompt: (n: number, d: number) => { summary: string; description: string; publicReqs: string[]; hiddenReqs: string[] };
+ };
+ 
+-const COMPANIES = ["Google", "Meta", "Amazon", "Apple", "Stripe", "Netflix", "Microsoft", "Cloudflare", "Datadog", "OpenAI"];
+-
++/** Practice families — procedurally expanded; not claimed as real company interview items. */
+ const FAMILIES: Family[] = [
+   {
+     key: "two-sum-family",
+@@ -435,7 +434,10 @@ const FAMILIES: Family[] = [
+   },
+ ];
+ 
+-/** Generate thousands of coding questions spanning Easy → Impossible. */
++/**
++ * Procedurally expand coding practice families to `count` items (Easy → Impossible).
++ * These are generated variants for volume practice — not hand-authored company leaks.
++ */
+ export function buildCodingBulk(count = 4000, existingSlugs: Set<string>): ChallengeSeed[] {
+   const out: ChallengeSeed[] = [];
+   let i = 0;
+@@ -454,14 +456,14 @@ export function buildCodingBulk(count = 4000, existingSlugs: Set<string>): Chall
+       slug,
+       title: `${family.title} #${n}`,
+       summary: body.summary,
+-      description: `${body.description}\n\n## Difficulty\n**${band} (D${difficulty}/10)**\n\n## Function\nImplement \`solve(...)\` in \`src/solution.ts\` (or language equivalent). Public tests call your export; hidden tests probe adversarial cases.`,
++      description: `${body.description}\n\n## Difficulty\n**${band} (D${difficulty}/10)**\n\n## Origin\nGenerated practice variant (${family.key}) — not a claimed company interview transcript.\n\n## Function\nImplement \`solve(...)\` in \`src/solution.ts\` (or language equivalent). Public tests call your export; hidden tests probe adversarial cases.`,
+       type: "CODING_PROBLEM",
+       track,
+       difficulty,
+       estimatedDays: 1,
+-      tags: [...family.tags, band.toLowerCase(), "question-bank"],
++      tags: [...family.tags, band.toLowerCase(), "question-bank", "generated"],
+       languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+-      companies: [COMPANIES[n % COMPANIES.length]!, COMPANIES[(n * 3) % COMPANIES.length]!],
++      companies: [],
+       frequency: Math.max(5, 100 - difficulty * 8 - (n % 17)),
+       avgMinutes: difficulty <= 3 ? 15 : difficulty <= 6 ? 25 : difficulty <= 8 ? 40 : difficulty === 9 ? 55 : 75,
+       isPremium: difficulty >= 9,
+diff --git a/src/server/execution/runner.ts b/src/server/execution/runner.ts
+index 0cfb33c..7efa970 100644
+--- a/src/server/execution/runner.ts
++++ b/src/server/execution/runner.ts
+@@ -449,44 +449,43 @@ async function recordTestRun(
+   });
+ }
+ 
+-async function evaluateHidden(assignmentId: string, runSucceeded: boolean) {
++/**
++ * Fallback when the Docker harness did not emit hidden results.
++ * Fail closed — never award hidden passes via keyword/TODO grepping (that was gameable).
++ * Official hidden credit requires a real harness run (`EXECUTION_MODE=docker` + worker).
++ */
++async function evaluateHidden(assignmentId: string, _runSucceeded: boolean) {
+   const assignment = await prisma.assessmentAssignment.findUniqueOrThrow({
+     where: { id: assignmentId },
+     include: {
+-      workspace: { include: { files: true } },
+       assessment: { include: { challenge: true } },
+     },
+   });
+-  const files = assignment.workspace?.files ?? [];
+-  const content = files.map((f) => f.path + "\n" + f.content).join("\n").toLowerCase();
+   const slug = assignment.assessment.challenge.slug;
+   const catalogCases = HIDDEN_CASES[slug];
++  const detail =
++    "Hidden suite unavailable without Docker harness output — no pass awarded (fail closed).";
+ 
+   if (catalogCases?.length) {
+-    return catalogCases.map((c) => {
+-      const tokens = (c.evidenceTokens ?? c.description.toLowerCase().split(/\W+/)).filter((t) => t.length > 2);
+-      const evidence = tokens.filter((t) => content.includes(t.toLowerCase())).length;
+-      // Require substantive implementation signal — stubs that only void args fail
+-      const hasTodo = /todo|void\s+\w+|return\s+(\[\]|false|null|0|\"\")/i.test(content);
+-      const pass = !hasTodo && evidence >= Math.min(2, tokens.length) && (runSucceeded || evidence >= 2);
+-      return {
+-        name: c.id,
+-        pass,
+-        hidden: true,
+-        requirement: c.description,
+-        evidenceHits: evidence,
+-      };
+-    });
++    return catalogCases.map((c) => ({
++      name: c.id,
++      pass: false,
++      hidden: true,
++      requirement: c.description,
++      mode: "harness_required",
++      detail,
++    }));
+   }
+ 
+   const hidden = (assignment.assessment.challenge.hiddenRequirements as string[]) ?? [];
+-  return hidden.map((req, idx) => {
+-    const tokens = req.toLowerCase().split(/\W+/).filter((t) => t.length > 4);
+-    const evidence = tokens.filter((t) => content.includes(t)).length;
+-    const hasTodo = /todo implement|not implemented/i.test(content);
+-    const pass = !hasTodo && evidence >= Math.min(2, tokens.length);
+-    return { name: `hidden_${idx + 1}`, pass, hidden: true, requirement: req, evidenceHits: evidence };
+-  });
++  return hidden.map((req, idx) => ({
++    name: `hidden_${idx + 1}`,
++    pass: false,
++    hidden: true,
++    requirement: req,
++    mode: "harness_required",
++    detail,
++  }));
+ }
+ 
+ async function recordDeploy(assignmentId: string, stdout: string, success: boolean) {
+diff --git a/src/server/learning/gamification.ts b/src/server/learning/gamification.ts
+index ab2227f..b39fb69 100644
+--- a/src/server/learning/gamification.ts
++++ b/src/server/learning/gamification.ts
+@@ -347,7 +347,7 @@ export function guestLearnerGameState(): LearnerGameState {
+       title: "Play an arcade game",
+       detail: "Two-minute games on hashing, Big-O and binary search",
+       href: "/learn/games",
+-      xp: 0,
++      xp: ARCADE_CLEAR_XP,
+       done: false,
+     },
+   ];
+-- 
+2.43.0
+
