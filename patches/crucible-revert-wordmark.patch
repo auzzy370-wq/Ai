@@ -1,0 +1,50 @@
+From 05f5401d1a6d1c891fe15b5d9537a34020ab2620 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 8 Nov 2026 02:58:35 +0000
+Subject: [PATCH] =?UTF-8?q?Revert=20wordmark=20to=20original=20Turkish-?=
+ =?UTF-8?q?=C4=B1=20flame=20tittle?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/brand/crucible-lockup.tsx | 17 +++++------------
+ 1 file changed, 5 insertions(+), 12 deletions(-)
+
+diff --git a/src/components/brand/crucible-lockup.tsx b/src/components/brand/crucible-lockup.tsx
+index cb0ad60..9e83a9c 100644
+--- a/src/components/brand/crucible-lockup.tsx
++++ b/src/components/brand/crucible-lockup.tsx
+@@ -25,24 +25,17 @@ export function CrucibleGlyph({ className }: { className?: string }) {
+   );
+ }
+ 
+-/** Wordmark: readable “Crucible” with an orange flame tittle on the i (real Latin i, not Turkish ı). */
++/** Wordmark matches the logo: geometric sans + orange tittle on the i. */
+ export function CrucibleWordmark({ className }: { className?: string }) {
+   return (
+     <span
+       className={cn("relative inline-block font-semibold tracking-[-0.045em] text-[var(--brand-ink)]", className)}
++      aria-label="Crucible"
+     >
+       Cruc
+-      <span className="relative inline-block">
+-        i
+-        {/* Cover the native tittle, then paint the brand flame */}
+-        <span
+-          aria-hidden
+-          className="pointer-events-none absolute left-1/2 top-[0.02em] z-[1] h-[0.28em] w-[0.34em] -translate-x-1/2 bg-[var(--brand-ink)]"
+-        />
+-        <span
+-          aria-hidden
+-          className="pointer-events-none absolute left-1/2 top-[0.05em] z-[2] h-[0.2em] w-[0.2em] -translate-x-1/2 rounded-full bg-[var(--brand-flame,#ff5a1f)]"
+-        />
++      <span className="relative inline-block" aria-hidden>
++        ı
++        <span className="pointer-events-none absolute left-1/2 top-[0.06em] h-[0.2em] w-[0.2em] -translate-x-1/2 rounded-full bg-[var(--brand-flame,#ff5a1f)]" />
+       </span>
+       ble
+     </span>
+-- 
+2.43.0
+
