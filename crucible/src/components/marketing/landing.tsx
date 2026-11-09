@@ -52,8 +52,8 @@ export function LandingPage(props: {
               Learn the craft. Hire the proof.
             </h1>
             <p className="landing-anim-copy mt-2 text-[14px] leading-relaxed text-[#5b7390] dark:text-white/55 sm:mt-3 sm:text-[15px]">
-              Short lessons and a curated problem bank. Timed assessments and hidden tests run when a Docker judge is
-              online — then a qualification profile you can share.
+              Short lessons and a curated problem bank. Timed assessments and hidden tests when the judge is online —
+              then a qualification profile you can share.
             </p>
             <div className="landing-anim-cta relative z-30 mt-5 flex w-full flex-col gap-2 pointer-events-auto sm:mt-9 sm:flex-row sm:items-center sm:gap-3">
               <Link
@@ -71,12 +71,10 @@ export function LandingPage(props: {
               </a>
             </div>
             <p className="landing-anim-copy mt-4 text-[11px] leading-relaxed text-slate-500 dark:text-white/40">
-              Demo seed data may appear on fresh installs. Hidden judging needs a Docker worker (
-              <code className="font-mono">JUDGE_ONLINE=true</code>).{" "}
+              Lessons and Practice work without an account.{" "}
               <Link href="/login?intent=hire" className="underline-offset-2 hover:underline">
-                Hiring teams
+                Hiring teams →
               </Link>
-              .
             </p>
           </div>
         </div>
