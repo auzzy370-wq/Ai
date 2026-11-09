@@ -1,0 +1,545 @@
+From 5faadf9072b26e7660a4c0c47166517b4222785c Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 22:10:52 +0000
+Subject: [PATCH] Add remote roles to Jobs board
+
+Detect remote/WFH postings, badge them, add a Remote focus chip,
+and pull remote keyword / LinkedIn workplace-type feeds so more
+distributed openings surface on the board.
+---
+ src/app/api/jobs/route.ts           |   6 +-
+ src/components/jobs/jobs-client.tsx |  39 ++++++---
+ src/server/jobs/adapters.ts         |  45 ++++++++++-
+ src/server/jobs/catalog.ts          | 119 ++++++++++++++++++++++++++--
+ src/server/jobs/decode.ts           |  45 +++++++++--
+ src/server/jobs/types.ts            |   2 +
+ 6 files changed, 227 insertions(+), 29 deletions(-)
+
+diff --git a/src/app/api/jobs/route.ts b/src/app/api/jobs/route.ts
+index b00c8f2..abbffa5 100644
+--- a/src/app/api/jobs/route.ts
++++ b/src/app/api/jobs/route.ts
+@@ -9,7 +9,7 @@ export const maxDuration = 60;
+ const Query = z.object({
+   company: z.string().optional(),
+   q: z.string().optional(),
+-  focus: z.enum(["all", "engineering", "cybersecurity"]).optional(),
++  focus: z.enum(["all", "engineering", "cybersecurity", "remote"]).optional(),
+   refresh: z.enum(["1", "true"]).optional(),
+ });
+ 
+@@ -31,7 +31,7 @@ export async function GET(req: Request) {
+       jobs = jobs.filter((j) => j.company === parsed.company);
+     }
+     if (focus !== "all") {
+-      jobs = jobs.filter((j) => matchesJobFocus(j.title, focus));
++      jobs = jobs.filter((j) => matchesJobFocus(j, focus));
+     }
+     if (parsed.q?.trim()) {
+       const needle = parsed.q.trim().toLowerCase();
+@@ -64,7 +64,7 @@ export async function GET(req: Request) {
+         r.company,
+         {
+           ok: r.ok,
+-          count: r.jobs.filter((j) => (focus === "all" ? true : matchesJobFocus(j.title, focus))).length,
++          count: r.jobs.filter((j) => (focus === "all" ? true : matchesJobFocus(j, focus))).length,
+           error: r.error ?? null,
+         },
+       ]),
+diff --git a/src/components/jobs/jobs-client.tsx b/src/components/jobs/jobs-client.tsx
+index 7937e49..8c3e91c 100644
+--- a/src/components/jobs/jobs-client.tsx
++++ b/src/components/jobs/jobs-client.tsx
+@@ -23,12 +23,13 @@ const SOURCE_LABEL: Record<JobSource, string> = {
+   linkedin: "LinkedIn listing",
+ };
+ 
+-type JobFocus = "all" | "engineering" | "cybersecurity";
++type JobFocus = "all" | "engineering" | "cybersecurity" | "remote";
+ 
+ const FOCUS_OPTIONS: { id: JobFocus; label: string }[] = [
+   { id: "all", label: "All tech" },
+   { id: "engineering", label: "Engineering" },
+   { id: "cybersecurity", label: "Cybersecurity" },
++  { id: "remote", label: "Remote" },
+ ];
+ 
+ function looksLikeCyber(title: string) {
+@@ -37,10 +38,20 @@ function looksLikeCyber(title: string) {
+   );
+ }
+ 
+-function matchesFocus(title: string, focus: JobFocus) {
++function isRemoteJob(job: JobPosting) {
++  if (job.remote) return true;
++  const blob = [job.title, job.location, job.summary, job.team].filter(Boolean).join(" ");
++  if (/\b(not remote|no remote|on-?site only|in-?office only|office only)\b/i.test(blob)) return false;
++  return /\b(remote|work[\s-]?from[\s-]?home|wfh|distributed team|work anywhere|telecommut|remote-?first|remote-?friendly|fully remote)\b/i.test(
++    blob,
++  );
++}
++
++function matchesFocus(job: JobPosting, focus: JobFocus) {
++  if (focus === "remote") return isRemoteJob(job);
+   if (focus === "all") return true;
+-  if (focus === "cybersecurity") return looksLikeCyber(title);
+-  return !looksLikeCyber(title);
++  if (focus === "cybersecurity") return looksLikeCyber(job.title);
++  return !looksLikeCyber(job.title);
+ }
+ 
+ function sortJobs(list: JobPosting[]) {
+@@ -112,7 +123,7 @@ export function JobsClient(props: {
+     const needle = debouncedQ.toLowerCase();
+     const filtered = boardJobs.filter((j) => {
+       if (company !== "All" && j.company !== company) return false;
+-      if (!matchesFocus(j.title, focus)) return false;
++      if (!matchesFocus(j, focus)) return false;
+       if (!needle) return true;
+       return (
+         j.title.toLowerCase().includes(needle) ||
+@@ -130,7 +141,7 @@ export function JobsClient(props: {
+     const counts: Record<string, number> = {};
+     for (const c of props.companies) counts[c] = 0;
+     for (const j of boardJobs) {
+-      if (!matchesFocus(j.title, focus)) continue;
++      if (!matchesFocus(j, focus)) continue;
+       counts[j.company] = (counts[j.company] ?? 0) + 1;
+     }
+     return counts;
+@@ -154,8 +165,8 @@ export function JobsClient(props: {
+           Official openings from company career boards
+         </h1>
+         <p className="mt-2 max-w-2xl text-slate-600">
+-          Aggregated public postings for software engineering and cybersecurity — not Crucible-hosted applications.
+-          Cards include a short description and yearly pay when the employer lists it.
++          Aggregated public postings for software engineering, cybersecurity, and remote roles — not Crucible-hosted
++          applications. Cards include a short description and yearly pay when the employer lists it.
+         </p>
+         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+           <Briefcase className="h-3.5 w-3.5" />
+@@ -163,6 +174,9 @@ export function JobsClient(props: {
+           {jobs.some((j) => j.salaryLabel) ? (
+             <span>· {jobs.filter((j) => j.salaryLabel).length} with listed yearly pay</span>
+           ) : null}
++          {jobs.some((j) => isRemoteJob(j)) ? (
++            <span>· {jobs.filter((j) => isRemoteJob(j)).length} remote</span>
++          ) : null}
+           {refreshedAt && (
+             <span>
+               · refreshed <LocalTime value={refreshedAt} />
+@@ -231,7 +245,9 @@ export function JobsClient(props: {
+             placeholder={
+               focus === "cybersecurity"
+                 ? "Filter AppSec, SOC, cloud security…"
+-                : "Filter title, description, location…"
++                : focus === "remote"
++                  ? "Filter remote title, city, team…"
++                  : "Filter title, description, location…"
+             }
+             className="sm:flex-1"
+           />
+@@ -284,7 +300,10 @@ export function JobsClient(props: {
+                   <div className="flex flex-wrap gap-2">
+                     <Badge variant="brand">{job.company}</Badge>
+                     <Badge>{SOURCE_LABEL[job.source]}</Badge>
+-                    {job.team ? <Badge variant="amber">{job.team}</Badge> : null}
++                    {isRemoteJob(job) ? <Badge variant="emerald">Remote</Badge> : null}
++                    {job.team && !/^remote$/i.test(job.team) ? (
++                      <Badge variant="amber">{job.team}</Badge>
++                    ) : null}
+                   </div>
+                   <h2 className="font-serif-display text-lg text-slate-900">{job.title}</h2>
+                   <p className="text-sm text-slate-600">{job.location}</p>
+diff --git a/src/server/jobs/adapters.ts b/src/server/jobs/adapters.ts
+index a77ab11..e57a586 100644
+--- a/src/server/jobs/adapters.ts
++++ b/src/server/jobs/adapters.ts
+@@ -1,5 +1,12 @@
+ import type { JobCompany, JobPosting, JobSource } from "./types";
+-import { decodeHtml, looksLikeEngRole, summarizeJobText, titleFromSlug } from "./decode";
++import {
++  decodeHtml,
++  isRemotePosting,
++  looksLikeEngRole,
++  normalizeRemoteLocation,
++  summarizeJobText,
++  titleFromSlug,
++} from "./decode";
+ import { parseYearlySalary } from "./salary";
+ 
+ /** Merge board pages / keyword searches and keep first occurrence per id. */
+@@ -49,7 +56,21 @@ function post(
+   source: JobSource,
+   partial: Omit<JobPosting, "company" | "source">,
+ ): JobPosting {
+-  return { company, source, ...partial };
++  const remote =
++    partial.remote ??
++    isRemotePosting({
++      title: partial.title,
++      location: partial.location,
++      summary: partial.summary,
++      team: partial.team,
++    });
++  return {
++    company,
++    source,
++    ...partial,
++    remote,
++    location: normalizeRemoteLocation(partial.location, remote),
++  };
+ }
+ 
+ function enrichFromText(
+@@ -58,9 +79,19 @@ function enrichFromText(
+ ): Omit<JobPosting, "company" | "source"> {
+   const sal = parseYearlySalary(text);
+   const summary = summarizeJobText(text) ?? partial.summary ?? null;
++  const remote =
++    partial.remote ??
++    isRemotePosting({
++      title: partial.title,
++      location: partial.location,
++      summary: summary ?? text,
++      team: partial.team,
++    });
+   return {
+     ...partial,
+     ...(summary ? { summary } : {}),
++    remote,
++    location: normalizeRemoteLocation(partial.location, remote),
+     ...(sal
+       ? {
+           salaryMin: sal.min,
+@@ -304,13 +335,20 @@ function parseLinkedInCards(html: string): LiCard[] {
+ 
+ export async function fetchLinkedInCompany(
+   company: JobCompany,
+-  opts: { companyId?: number; keywords: string; requireCompanyName?: string },
++  opts: {
++    companyId?: number;
++    keywords: string;
++    requireCompanyName?: string;
++    /** LinkedIn workplace type: 2 = Remote. */
++    remoteOnly?: boolean;
++  },
+ ): Promise<JobPosting[]> {
+   const params = new URLSearchParams({
+     keywords: opts.keywords,
+     start: "0",
+   });
+   if (opts.companyId) params.set("f_C", String(opts.companyId));
++  if (opts.remoteOnly) params.set("f_WT", "2");
+   const html = await fetchText(
+     `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?${params.toString()}`,
+     { headers: { accept: "text/html" } },
+@@ -327,6 +365,7 @@ export async function fetchLinkedInCompany(
+         location: c.location,
+         summary: `${c.title} at ${company} — open the LinkedIn listing for the full description.`,
+         url: c.url,
++        ...(opts.remoteOnly ? { remote: true } : {}),
+       }),
+     );
+ }
+diff --git a/src/server/jobs/catalog.ts b/src/server/jobs/catalog.ts
+index bc32fb8..bc39dc4 100644
+--- a/src/server/jobs/catalog.ts
++++ b/src/server/jobs/catalog.ts
+@@ -69,6 +69,58 @@ const CAREERS_SEARCH: Record<JobCompany, { url: string; source: JobSource }> = {
+   },
+ };
+ 
++/** Remote eng browse links when a live feed is empty or blocked. */
++const CAREERS_SEARCH_REMOTE: Record<JobCompany, { url: string; source: JobSource }> = {
++  Google: {
++    url: "https://www.google.com/about/careers/applications/jobs/results/?q=Software%20Engineer%20remote",
++    source: "google",
++  },
++  Meta: {
++    url: "https://www.metacareers.com/jobs/?q=remote%20software%20engineer",
++    source: "linkedin",
++  },
++  Amazon: {
++    url: "https://www.amazon.jobs/en/search?base_query=remote%20software%20engineer",
++    source: "amazon",
++  },
++  Apple: {
++    url: "https://jobs.apple.com/en-us/search?search=remote%20software%20engineer&sort=relevance",
++    source: "apple",
++  },
++  Microsoft: {
++    url: "https://jobs.careers.microsoft.com/global/en/search?q=remote%20software%20engineer",
++    source: "linkedin",
++  },
++  Stripe: {
++    url: "https://stripe.com/jobs/search?q=remote",
++    source: "greenhouse",
++  },
++  Netflix: {
++    url: "https://explore.jobs.netflix.net/careers?query=remote%20software%20engineer",
++    source: "netflix",
++  },
++  Uber: {
++    url: "https://www.uber.com/us/en/careers/list/?query=remote%20software%20engineer",
++    source: "linkedin",
++  },
++  Cloudflare: {
++    url: "https://www.cloudflare.com/careers/jobs/?department=Engineering",
++    source: "greenhouse",
++  },
++  Bloomberg: {
++    url: "https://careers.bloomberg.com/job/search?q=remote%20software%20engineer",
++    source: "linkedin",
++  },
++  LinkedIn: {
++    url: "https://www.linkedin.com/jobs/search/?keywords=remote%20software%20engineer%20LinkedIn&f_WT=2",
++    source: "linkedin",
++  },
++  Shopify: {
++    url: "https://www.shopify.com/careers/search?q=remote",
++    source: "shopify",
++  },
++};
++
+ /** Cybersecurity browse links when a live feed is empty or blocked. */
+ const CAREERS_SEARCH_CYBER: Record<JobCompany, { url: string; source: JobSource }> = {
+   Google: {
+@@ -121,24 +173,37 @@ const CAREERS_SEARCH_CYBER: Record<JobCompany, { url: string; source: JobSource
+   },
+ };
+ 
+-function browseFallback(company: JobCompany, focus: "engineering" | "cybersecurity" = "engineering"): JobPosting {
+-  const dest = focus === "cybersecurity" ? CAREERS_SEARCH_CYBER[company] : CAREERS_SEARCH[company];
++function browseFallback(
++  company: JobCompany,
++  focus: "engineering" | "cybersecurity" | "remote" = "engineering",
++): JobPosting {
++  const dest =
++    focus === "cybersecurity"
++      ? CAREERS_SEARCH_CYBER[company]
++      : focus === "remote"
++        ? CAREERS_SEARCH_REMOTE[company]
++        : CAREERS_SEARCH[company];
+   const title =
+     focus === "cybersecurity"
+       ? `Browse ${company} cybersecurity roles`
+-      : `Browse ${company} engineering roles`;
++      : focus === "remote"
++        ? `Browse ${company} remote roles`
++        : `Browse ${company} engineering roles`;
+   return {
+     id: `browse-${focus}-${company}`,
+     company,
+     title,
+-    location: "Official careers site",
+-    team: focus === "cybersecurity" ? "Security search" : "Open search",
++    location: focus === "remote" ? "Remote" : "Official careers site",
++    team: focus === "cybersecurity" ? "Security search" : focus === "remote" ? "Remote search" : "Open search",
+     summary:
+       focus === "cybersecurity"
+         ? `Jump to ${company}'s official careers search for security and cybersecurity openings.`
+-        : `Jump to ${company}'s official careers search for software and engineering openings.`,
++        : focus === "remote"
++          ? `Jump to ${company}'s official careers search for remote and distributed openings.`
++          : `Jump to ${company}'s official careers search for software and engineering openings.`,
+     url: dest.url,
+     source: dest.source,
++    remote: focus === "remote" ? true : null,
+   };
+ }
+ 
+@@ -153,6 +218,7 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+             fetchGoogle("Software Engineer"),
+             fetchGoogle("Security Engineer"),
+             fetchGoogle("Cybersecurity"),
++            fetchGoogle("Remote Software Engineer"),
+           ])),
+         );
+         break;
+@@ -162,6 +228,7 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+             fetchAmazon("software engineer"),
+             fetchAmazon("security engineer"),
+             fetchAmazon("cybersecurity"),
++            fetchAmazon("remote software engineer"),
+           ])),
+         );
+         break;
+@@ -170,6 +237,11 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+           ...(await Promise.all([
+             fetchLinkedInCompany("Meta", { companyId: 10667, keywords: "software engineer" }),
+             fetchLinkedInCompany("Meta", { companyId: 10667, keywords: "security engineer" }),
++            fetchLinkedInCompany("Meta", {
++              companyId: 10667,
++              keywords: "software engineer",
++              remoteOnly: true,
++            }),
+           ])),
+         );
+         break;
+@@ -179,6 +251,7 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+             fetchApple("software engineer"),
+             fetchApple("security engineer"),
+             fetchApple("cybersecurity"),
++            fetchApple("remote software engineer"),
+           ])),
+         );
+         break;
+@@ -187,6 +260,11 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+           ...(await Promise.all([
+             fetchLinkedInCompany("Microsoft", { companyId: 1035, keywords: "software engineer" }),
+             fetchLinkedInCompany("Microsoft", { companyId: 1035, keywords: "security engineer" }),
++            fetchLinkedInCompany("Microsoft", {
++              companyId: 1035,
++              keywords: "software engineer",
++              remoteOnly: true,
++            }),
+           ])),
+         );
+         break;
+@@ -200,6 +278,7 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+             fetchNetflix("software engineer"),
+             fetchNetflix("security engineer"),
+             fetchNetflix("cybersecurity"),
++            fetchNetflix("remote software engineer"),
+           ])),
+         );
+         break;
+@@ -214,6 +293,11 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+               keywords: 'Uber "Security Engineer"',
+               requireCompanyName: "Uber",
+             }),
++            fetchLinkedInCompany("Uber", {
++              keywords: 'Uber "Software Engineer"',
++              requireCompanyName: "Uber",
++              remoteOnly: true,
++            }),
+           ])),
+         );
+         break;
+@@ -231,6 +315,11 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+               keywords: 'Bloomberg "Security Engineer"',
+               requireCompanyName: "Bloomberg",
+             }),
++            fetchLinkedInCompany("Bloomberg", {
++              keywords: 'Bloomberg "Software Engineer"',
++              requireCompanyName: "Bloomberg",
++              remoteOnly: true,
++            }),
+           ])),
+         );
+         break;
+@@ -239,24 +328,38 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+           ...(await Promise.all([
+             fetchLinkedInCompany("LinkedIn", { companyId: 1337, keywords: "software engineer" }),
+             fetchLinkedInCompany("LinkedIn", { companyId: 1337, keywords: "security engineer" }),
++            fetchLinkedInCompany("LinkedIn", {
++              companyId: 1337,
++              keywords: "software engineer",
++              remoteOnly: true,
++            }),
+           ])),
+         );
+         break;
+       case "Shopify":
++        // Shopify is remote-first; feed locations/descriptions usually say so.
+         jobs = await fetchShopify();
+         break;
+       default:
+         jobs = [];
+     }
+     if (!jobs.length) {
+-      jobs = [browseFallback(company, "engineering"), browseFallback(company, "cybersecurity")];
++      jobs = [
++        browseFallback(company, "engineering"),
++        browseFallback(company, "cybersecurity"),
++        browseFallback(company, "remote"),
++      ];
+     }
+     return { company, ok: true, jobs, fetchedAt };
+   } catch (e) {
+     return {
+       company,
+       ok: false,
+-      jobs: [browseFallback(company, "engineering"), browseFallback(company, "cybersecurity")],
++      jobs: [
++        browseFallback(company, "engineering"),
++        browseFallback(company, "cybersecurity"),
++        browseFallback(company, "remote"),
++      ],
+       error: e instanceof Error ? e.message.slice(0, 160) : "Fetch failed",
+       fetchedAt,
+     };
+diff --git a/src/server/jobs/decode.ts b/src/server/jobs/decode.ts
+index 6c5b278..05949d3 100644
+--- a/src/server/jobs/decode.ts
++++ b/src/server/jobs/decode.ts
+@@ -73,12 +73,47 @@ export function looksLikeEngRole(title: string): boolean {
+   );
+ }
+ 
+-export type JobFocus = "all" | "engineering" | "cybersecurity";
++export type JobFocus = "all" | "engineering" | "cybersecurity" | "remote";
++
++/** True when title/location/summary clearly advertise remote work. */
++export function isRemotePosting(input: {
++  title?: string | null;
++  location?: string | null;
++  summary?: string | null;
++  team?: string | null;
++}): boolean {
++  const blob = [input.title, input.location, input.summary, input.team].filter(Boolean).join(" ");
++  if (!blob.trim()) return false;
++  if (/\b(not remote|no remote|on-?site only|in-?office only|office only)\b/i.test(blob)) return false;
++  return /\b(remote|work[\s-]?from[\s-]?home|wfh|distributed team|work anywhere|telecommut|remote-?first|remote-?friendly|fully remote)\b/i.test(
++    blob,
++  );
++}
++
++export function normalizeRemoteLocation(location: string, remote: boolean): string {
++  if (!remote) return location;
++  if (/remote/i.test(location)) return location;
++  if (!location || /^see posting$/i.test(location) || /^official careers site$/i.test(location)) {
++    return "Remote";
++  }
++  return `${location} · Remote`;
++}
++
++type FocusableJob = {
++  title: string;
++  location?: string | null;
++  summary?: string | null;
++  team?: string | null;
++  remote?: boolean | null;
++};
+ 
+ /** Filter postings by Jobs focus chip. */
+-export function matchesJobFocus(title: string, focus: JobFocus): boolean {
+-  if (focus === "all") return looksLikeEngRole(title);
+-  if (focus === "cybersecurity") return looksLikeCyberRole(title);
++export function matchesJobFocus(job: FocusableJob | string, focus: JobFocus): boolean {
++  // Back-compat: older callers passed title string only.
++  const row: FocusableJob = typeof job === "string" ? { title: job } : job;
++  if (focus === "remote") return Boolean(row.remote) || isRemotePosting(row);
++  if (focus === "all") return looksLikeEngRole(row.title);
++  if (focus === "cybersecurity") return looksLikeCyberRole(row.title);
+   // Engineering: tech roles that are not primarily cyber-titled.
+-  return looksLikeEngRole(title) && !looksLikeCyberRole(title);
++  return looksLikeEngRole(row.title) && !looksLikeCyberRole(row.title);
+ }
+diff --git a/src/server/jobs/types.ts b/src/server/jobs/types.ts
+index eaee78f..cd616f8 100644
+--- a/src/server/jobs/types.ts
++++ b/src/server/jobs/types.ts
+@@ -19,6 +19,8 @@ export type JobPosting = {
+   team?: string;
+   /** Short plain-text blurb from the posting when available. */
+   summary?: string | null;
++  /** True when the posting looks remote / WFH / distributed. */
++  remote?: boolean | null;
+   url: string;
+   source: JobSource;
+   postedAt?: string | null;
+-- 
+2.43.0
+
