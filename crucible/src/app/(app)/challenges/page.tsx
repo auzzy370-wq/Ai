@@ -4,6 +4,9 @@ import { Problemset } from "@/components/challenges/problemset";
 import { isCodingProblem } from "@/server/challenges/coding-problems";
 import { editorialSlugByChallengeSlug, resolveEditorialSlug } from "@/server/saas/editorials";
 import { SaveProgressCta } from "@/components/learn/save-progress-cta";
+import { JudgeBanner } from "@/components/layout/judge-banner";
+import { stripeEnabled } from "@/server/saas/stripe";
+import { getJudgeStatus } from "@/server/execution/judge-status";
 
 /** First paint only — full library is browsed via /api/challenges search + load more. */
 const CODING_LIMIT = 80;
@@ -149,10 +152,14 @@ export default async function ChallengesPage({
 
   const problems = rows.filter((r) => isCodingProblem(r));
   const projects = rows.filter((r) => !isCodingProblem(r));
+  const checkoutAvailable =
+    stripeEnabled() || process.env.ALLOW_MOCK_BILLING === "true";
+  const judge = getJudgeStatus();
 
   return (
     <div className="space-y-4">
       <SaveProgressCta guest={!user} />
+      <JudgeBanner />
       <Problemset
         problems={problems}
         projects={projects}
@@ -162,6 +169,8 @@ export default async function ChallengesPage({
         libraryAllTotals={{ coding: codingAllTotal, projects: projectAllTotal }}
         includeGenerated={includeGenerated}
         signedIn={Boolean(user)}
+        checkoutAvailable={checkoutAvailable}
+        judgeOnline={judge.online}
         difficultyCounts={difficultyCounts}
         trackFilter={sp.track && sp.track !== "generated" ? sp.track : null}
       />

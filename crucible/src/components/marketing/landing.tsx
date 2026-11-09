@@ -52,22 +52,23 @@ export function LandingPage(props: {
               Learn the craft. Hire the proof.
             </h1>
             <p className="landing-anim-copy mt-2 text-[14px] leading-relaxed text-[#5b7390] dark:text-white/55 sm:mt-3 sm:text-[15px]">
-              Short lessons, a curated problem bank, and timed assessments with public + hidden tests — then a
-              qualification profile you can share.
+              Short lessons and a curated problem bank. Timed assessments and hidden tests run when a Docker judge is
+              online — then a qualification profile you can share.
             </p>
-            <div className="landing-anim-cta mt-5 flex w-full flex-col gap-2 sm:mt-9 sm:flex-row sm:items-center sm:gap-3">
+            <div className="landing-anim-cta relative z-30 mt-5 flex w-full flex-col gap-2 pointer-events-auto sm:mt-9 sm:flex-row sm:items-center sm:gap-3">
               <Link
                 href="/register"
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[var(--brand)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] sm:min-h-12 sm:w-auto"
+                prefetch={false}
+                className="relative z-30 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[var(--brand)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--brand-hover)] sm:min-h-12 sm:w-auto"
               >
                 Start learning free
               </Link>
-              <Link
+              <a
                 href="/learn"
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white/70 px-5 text-sm text-slate-800 transition hover:border-slate-400 hover:bg-white dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:border-white/35 dark:hover:bg-white/10 sm:min-h-12 sm:w-auto"
+                className="relative z-30 inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 bg-white/70 px-5 text-sm text-slate-800 transition hover:border-slate-400 hover:bg-white dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:border-white/35 dark:hover:bg-white/10 sm:min-h-12 sm:w-auto"
               >
                 Browse as guest
-              </Link>
+              </a>
             </div>
             <p className="landing-anim-copy mt-4 text-[11px] leading-relaxed text-slate-500 dark:text-white/40">
               Demo seed data may appear on fresh installs. Hidden judging needs a Docker worker (
@@ -89,8 +90,8 @@ export function LandingPage(props: {
               Get interview-ready
             </h2>
             <p className="mt-4 max-w-md text-[15px] leading-relaxed text-slate-500">
-              Interview Craft + AI Craft lessons, a hand-authored problem bank, and timed mocks. Pass public examples,
-              then the hidden harness when the judge is online.
+              Interview Craft + AI Craft lessons and a hand-authored problem bank. Timed mocks after you sign in. Hidden
+              harnesses run only when the judge worker is online.
             </p>
             <Link
               href="/register"
@@ -135,7 +136,7 @@ export function LandingPage(props: {
             href={`/u/${sampleSlug}`}
             className="text-sm font-medium text-[var(--brand)] transition hover:text-[var(--brand-hover)]"
           >
-            Open a sample qualification profile →
+            Open demo sample profile →
           </Link>
         </div>
       </section>

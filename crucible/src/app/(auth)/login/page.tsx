@@ -106,8 +106,8 @@ function LoginForm() {
           </CardTitle>
           <CardDescription className="mt-2">
             {mode === "hire"
-              ? "Assign timed work, review isolated workspaces, and decide with scorecards."
-              : "Practice with the same timed judges employers use. Build a verified profile as you learn."}
+              ? "Staff sign-in for assigning assessments and reviewing scorecards. The hiring loop stays lean on this deploy."
+              : "Sign in to save XP, open workspaces, and continue lessons. Hidden judging needs a Docker worker when enabled."}
           </CardDescription>
         </div>
       </CardHeader>

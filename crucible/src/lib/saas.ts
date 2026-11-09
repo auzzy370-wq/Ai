@@ -7,7 +7,7 @@ export const PREMIUM_FEATURES = [
   {
     id: "lightning-judge",
     title: "Lightning Judge",
-    blurb: "Higher priority in the Docker judge queue when workers are busy.",
+    blurb: "Higher priority in the Docker judge queue when a worker is attached and busy.",
   },
   {
     id: "premium-content",

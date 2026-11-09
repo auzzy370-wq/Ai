@@ -7,6 +7,7 @@ import { buildLearnerGameState, guestLearnerGameState, LESSON_XP } from "@/serve
 import { ARCADE_GAMES } from "@/server/learning/arcade-games";
 import { ProgressHero } from "@/components/learn/progress-hero";
 import { SaveProgressCta } from "@/components/learn/save-progress-cta";
+import { JudgeBanner } from "@/components/layout/judge-banner";
 import { WelcomeSignIn } from "@/components/auth/welcome-sign-in";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ export default async function LearnHubPage() {
         </div>
         <ProgressHero game={game} />
         <SaveProgressCta guest={!user} />
+        <JudgeBanner />
       </header>
 
       {assigned.length > 0 && (
@@ -131,16 +133,25 @@ export default async function LearnHubPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <PracticeCard
             title="Problem bank"
-            body="Coding, security and system problems, judged on public and hidden tests."
+            body="Hand-authored coding and mission problems. Hidden suites need a Docker judge."
             href="/challenges"
             cta="Browse problems"
           />
-          <PracticeCard
-            title="Mock interviews"
-            body="Timed rounds modeled on real company loops."
-            href="/interview"
-            cta="Start a mock"
-          />
+          {user ? (
+            <PracticeCard
+              title="Mock interviews"
+              body="Timed rounds modeled on company loops (signed-in)."
+              href="/interview"
+              cta="Start a mock"
+            />
+          ) : (
+            <PracticeCard
+              title="Mock interviews"
+              body="Timed company rounds unlock after you create a free account."
+              href="/register?next=/interview"
+              cta="Sign in to unlock"
+            />
+          )}
           <PracticeCard
             title="Arcade"
             body={`${ARCADE_GAMES.length} two-minute games for hashing, Big-O and binary search.`}

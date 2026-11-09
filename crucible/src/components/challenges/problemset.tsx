@@ -90,6 +90,9 @@ export function Problemset(props: {
   libraryAllTotals?: { coding: number; projects: number };
   includeGenerated?: boolean;
   signedIn?: boolean;
+  /** When false, Premium locks/CTAs are hidden — content is free on this host. */
+  checkoutAvailable?: boolean;
+  judgeOnline?: boolean;
   difficultyCounts?: Record<DifficultyBand, number>;
   trackFilter?: string | null;
 }) {
@@ -264,7 +267,8 @@ export function Problemset(props: {
       router.push("/register?next=/challenges");
       return;
     }
-    if (Boolean(p.isPremium) && !props.premium) {
+    const premiumGated = Boolean(props.checkoutAvailable) && Boolean(p.isPremium) && !props.premium;
+    if (premiumGated) {
       router.push("/pricing");
       return;
     }
@@ -483,12 +487,14 @@ export function Problemset(props: {
           >
             Missions ({(props.libraryTotals?.projects ?? props.projects.length).toLocaleString()})
           </button>
-          <Link
-            href="/pricing"
-            className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 sm:col-span-1"
-          >
-            Premium
-          </Link>
+          {props.checkoutAvailable ? (
+            <Link
+              href="/pricing"
+              className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 sm:col-span-1"
+            >
+              Premium
+            </Link>
+          ) : null}
         </div>
       </header>
 
@@ -605,7 +611,7 @@ export function Problemset(props: {
             )}
             {visible.map((p, i) => {
               const L = label(p.difficulty);
-              const locked = Boolean(p.isPremium) && !props.premium;
+              const locked = Boolean(props.checkoutAvailable) && Boolean(p.isPremium) && !props.premium;
               const acc = acceptanceFor(p);
               const starred = bookmarkedIds.has(p.id);
               return (
@@ -629,7 +635,7 @@ export function Problemset(props: {
                     <span className={cn("shrink-0 text-sm font-medium", diffClass(L))}>{L}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {p.isPremium && <Badge variant="amber">Premium</Badge>}
+                    {props.checkoutAvailable && p.isPremium && <Badge variant="amber">Premium</Badge>}
                     {[...new Set(p.companies ?? [])].slice(0, 3).map((c) => (
                       <span
                         key={`${p.id}-co-${c}`}
@@ -676,7 +682,11 @@ export function Problemset(props: {
                         onClick={() => void startProblem(p)}
                         className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-orange-400/30 bg-orange-500/10 text-sm text-orange-900 disabled:opacity-50"
                       >
-                        {starting === p.id ? "Opening…" : `Solve · ${CODING_LANGUAGE_LABELS[lang]}`}
+                        {starting === p.id
+                          ? "Opening…"
+                          : !props.signedIn
+                            ? "Sign in to solve"
+                            : `Solve · ${CODING_LANGUAGE_LABELS[lang]}`}
                       </button>
                     )}
                   </div>
@@ -713,7 +723,7 @@ export function Problemset(props: {
               <tbody>
                 {visible.map((p, i) => {
                   const L = label(p.difficulty);
-                  const locked = Boolean(p.isPremium) && !props.premium;
+                  const locked = Boolean(props.checkoutAvailable) && Boolean(p.isPremium) && !props.premium;
                   const acc = acceptanceFor(p);
                   const starred = bookmarkedIds.has(p.id);
                   return (
@@ -732,7 +742,7 @@ export function Problemset(props: {
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium text-slate-900">{p.title}</span>
-                          {p.isPremium && <Badge variant="amber">Premium</Badge>}
+                          {props.checkoutAvailable && p.isPremium && <Badge variant="amber">Premium</Badge>}
                           {p.editorialSlug && (
                             <Link
                               href={`/editorials?slug=${encodeURIComponent(p.editorialSlug)}`}
@@ -783,7 +793,7 @@ export function Problemset(props: {
                             onClick={() => void startProblem(p)}
                             className="text-orange-700 hover:underline disabled:opacity-50"
                           >
-                            {starting === p.id ? "Opening…" : `Solve (${CODING_LANGUAGE_LABELS[lang]}) →`}
+                            {starting === p.id ? "Opening…" : !props.signedIn ? "Sign in →" : `Solve (${CODING_LANGUAGE_LABELS[lang]}) →`}
                           </button>
                         )}
                       </td>

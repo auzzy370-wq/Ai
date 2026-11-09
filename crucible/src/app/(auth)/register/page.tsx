@@ -77,8 +77,8 @@ export default function RegisterPage() {
           <div>
             <CardTitle className="font-serif-display text-2xl tracking-tight">Start learning free</CardTitle>
             <CardDescription className="mt-2">
-              Practice timed engineering and security work, build a verified profile, and share evidence employers can
-              trust.
+              Free learner account: save XP and streaks, open practice workspaces, and build a profile as you finish
+              real work. Hidden judging needs a Docker worker when enabled.
             </CardDescription>
           </div>
         </CardHeader>

@@ -77,6 +77,12 @@ export default async function PublicQualificationProfile({
       </header>
 
       <main className="relative z-10 mx-auto max-w-4xl space-y-8 px-6 pb-20">
+        {["casey-elite", "sam-appsec", "premium-prep"].includes(slug) && (
+          <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+            <span className="font-semibold">Demo seed profile.</span> Progress and ELITE scores here are sample data from
+            platform seed — not a live candidate applying to your company.
+          </p>
+        )}
         <section className="animate-rise overflow-hidden rounded-2xl border border-orange-300/60 bg-[var(--surface-elevated)] p-6 sm:p-8">
           <p className="font-mono text-xs tracking-[0.3em] text-orange-700">VERIFIED PROFILE</p>
           <h1 className="mt-3 font-serif-display text-3xl tracking-tight text-slate-900 sm:text-4xl">

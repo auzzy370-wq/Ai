@@ -63,8 +63,9 @@ export function PricingClient(props: {
           Evidence over puzzles
         </h1>
         <p className="mt-3 text-slate-600">
-          Free forever for core evidence sessions. Premium unlocks company intel, Lightning Judge, study plans,
-          simulations, autocomplete, debugger, and unlimited playgrounds.
+          {props.stripeConfigured || props.mockBilling
+            ? "Free forever for core practice. Premium adds company intel, priority judge queue, mocks, and more."
+            : "Free practice is live on this host. Premium checkout is not configured here — no paid upgrades yet."}
         </p>
         {props.premium && (
           <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-900 dark:text-amber-100">
@@ -87,17 +88,21 @@ export function PricingClient(props: {
               <li>Public evidence sessions + daily challenge</li>
               <li>Free study plans</li>
               <li>3 playgrounds</li>
-              <li>Standard judge queue · six languages</li>
+              <li>Six languages · Docker judge when a worker is online</li>
             </ul>
           </CardContent>
         </Card>
-        <Card className="border-orange-300/60 bg-orange-500/5">
+        <Card className={props.stripeConfigured || props.mockBilling ? "border-orange-300/60 bg-orange-500/5" : "border-slate-200"}>
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle>Premium</CardTitle>
-              <Badge variant="brand">Most popular</Badge>
+              {(props.stripeConfigured || props.mockBilling) && <Badge variant="brand">Most popular</Badge>}
             </div>
-            <CardDescription>Full craft loop — company tags, Lightning Judge, verified depth</CardDescription>
+            <CardDescription>
+              {props.stripeConfigured || props.mockBilling
+                ? "Company tags, priority judge queue, mocks, and deeper practice packs."
+                : "Not for sale on this deployment. Free problems and lessons stay available."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-end gap-3">
@@ -136,7 +141,7 @@ export function PricingClient(props: {
               </Button>
             ) : (
               <Button className="w-full" disabled>
-                Premium checkout unavailable
+                Not for sale on this host
               </Button>
             )}
             <p className="text-xs text-slate-500">
@@ -150,16 +155,18 @@ export function PricingClient(props: {
         </Card>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {PREMIUM_FEATURES.map((f) => (
-          <Card key={f.id} className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="text-base">{f.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm leading-relaxed text-slate-600">{f.blurb}</CardContent>
-          </Card>
-        ))}
-      </section>
+      {(props.stripeConfigured || props.mockBilling) && (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {PREMIUM_FEATURES.map((f) => (
+            <Card key={f.id} className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="text-base">{f.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm leading-relaxed text-slate-600">{f.blurb}</CardContent>
+            </Card>
+          ))}
+        </section>
+      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "CRUCIBLE",
   description:
-    "CRUCIBLE — elite software engineering and cybersecurity assessments. Prove the craft in timed, evidence-based challenges.",
+    "CRUCIBLE — learn engineering craft with lessons, a curated problem bank, and timed assessments. Hidden judging needs a Docker worker.",
 };
 
 export const viewport = {
