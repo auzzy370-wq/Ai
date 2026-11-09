@@ -44,3 +44,6 @@ Apply `crucible-landing-footnote.patch`: remove demo-seed / JUDGE_ONLINE from he
 
 ## Purple brand (2026-11-09)
 Apply `crucible-purple-brand.patch`: orange → purple across tokens + logo.
+
+## Jobs cybersecurity (2026-11-09)
+Apply `crucible-jobs-cybersecurity.patch`: cyber focus chip + security keyword fetches.
