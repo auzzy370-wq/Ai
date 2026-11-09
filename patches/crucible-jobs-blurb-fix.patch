@@ -1,0 +1,33 @@
+From 360b12f0a11adcc5f7f4938e65587571d75e0a45 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 22:05:07 +0000
+Subject: [PATCH] Skip company mission boilerplate in Jobs card blurbs
+
+---
+ src/server/jobs/decode.ts | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/server/jobs/decode.ts b/src/server/jobs/decode.ts
+index cdecb77..6c5b278 100644
+--- a/src/server/jobs/decode.ts
++++ b/src/server/jobs/decode.ts
+@@ -25,6 +25,16 @@ export function summarizeJobText(raw: string | null | undefined, maxLen = 200):
+     /^(about (the )?(role|job|position|us)|overview|who we are|the role|job description)\s*[:.\-–—]?\s*/i,
+     "",
+   );
++  // Skip generic company mission openers (Cloudflare/Stripe/etc. paste the same paragraph).
++  text = text.replace(
++    /^At [A-Z][\w .,&-]{1,40}, we are on a mission[\s\S]{0,280}?(?=\b(?:Available|What you|What you'll|In this|You'll|You will|We are looking|We're looking|As a|This role)\b)/i,
++    "",
++  );
++  text = text.replace(
++    /^(Available Locations?:|Location:|Type:|Department:)[^.]*\.\s*/i,
++    "",
++  );
++  text = text.trim();
+   if (text.length < 48) return null;
+   if (text.length <= maxLen) return text;
+   const cut = text.slice(0, maxLen - 1);
+-- 
+2.43.0
+
