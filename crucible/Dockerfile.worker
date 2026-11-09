@@ -1,0 +1,12 @@
+FROM node:20-bookworm-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates docker.io python3 golang-go && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY prisma ./prisma
+RUN npx prisma generate
+COPY worker ./worker
+COPY challenges ./challenges
+COPY scripts ./scripts
+ENV NODE_ENV=production
+CMD ["npx", "tsx", "worker/index.ts"]

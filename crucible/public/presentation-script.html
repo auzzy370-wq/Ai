@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRUCIBLE — Speaker Script</title>
+  <style>
+    :root {
+      --bg: #070b12;
+      --panel: #0b1220;
+      --line: #1f2a3d;
+      --text: #e5eefb;
+      --muted: #8aa0b8;
+      --accent: #ff5a1f;
+      --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.55;
+    }
+    .wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+    .top {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+    .intro { color: var(--muted); margin: 0 0 28px; }
+    .meta {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      background: var(--panel);
+      margin-bottom: 28px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .meta strong { color: var(--text); }
+    .slide {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(11, 18, 32, 0.9);
+      padding: 18px 18px 16px;
+      margin-bottom: 16px;
+    }
+    .slide header {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .num {
+      font-family: var(--mono);
+      color: var(--accent);
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      border-radius: 8px;
+      padding: 2px 8px;
+      font-size: 0.8rem;
+    }
+    .slide h2 {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+    .time {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .say {
+      margin: 0 0 12px;
+      white-space: pre-wrap;
+    }
+    .beat {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .beat strong { color: #a5f3fc; font-weight: 600; }
+    a { color: var(--accent); }
+    @media print {
+      body { background: white; color: #111; }
+      .slide { break-inside: avoid; border-color: #ccc; background: #fff; }
+      .num, .top, a, .beat strong { color: #0e7490; }
+      .intro, .meta, .beat, .time { color: #444; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">Speaker script</div>
+    <h1>CRUCIBLE</h1>
+    <p class="intro">
+      Read the “Say” lines out loud. Use the “Do” lines as stage directions while the slide is up.
+      Target total: about <strong>10–12 minutes</strong> without live demo, or <strong>18–20 minutes</strong> with the 8‑minute demo.
+    </p>
+
+    <div class="meta">
+      <div><strong>Open slides:</strong> <a href="/presentation.html">/presentation.html</a></div>
+      <div><strong>Demo app:</strong> <a href="/login">/login</a> · Register at <code>/register</code></div>
+      <div><strong>Staff:</strong> <code>hiring@crucible.local</code> or <code>reviewer@crucible.local</code> / <code>[set via DEMO_ADMIN_PASSWORD]</code></div>
+      <div><strong>Controls:</strong> → / Space next · ← previous · F fullscreen</div>
+    </div>
+
+    <article class="slide" id="s1">
+      <header><span class="num">01</span><h2>Title</h2><span class="time">~45 sec</span></header>
+      <p class="say">“Thanks for the time. I’m going to walk you through CRUCIBLE — an elite software engineering and cybersecurity qualification platform.
+
+The short version: candidates don’t solve puzzles. They design, build, secure, test, deploy, and recover real systems. Résumé claims are never treated as proof.”</p>
+      <p class="beat"><strong>Do:</strong> Pause on the three stats — 19 challenges, 3 tracks, ≥90 elite bar. Let that land before advancing.</p>
+    </article>
+
+    <article class="slide" id="s2">
+      <header><span class="num">02</span><h2>The hiring gap</h2><span class="time">~1 min</span></header>
+      <p class="say">“Everyone in this room already knows the pain. We hire ‘senior’ talent off résumés and whiteboards, then discover in month three that they can’t ship, secure, or own a system under pressure.
+
+Claims aren’t competence. Algorithm drills aren’t production ownership. And security is often a separate process — or skipped entirely.
+
+Crucible replaces that theater with a controlled proving ground: isolated workspaces, hidden tests, deploy checks, incident pressure, and a human final gate.”</p>
+      <p class="beat"><strong>Do:</strong> Gesture left “what breaks,” right “what replaces it.” Don’t read every bullet — pick two that match your audience.</p>
+    </article>
+
+    <article class="slide" id="s3">
+      <header><span class="num">03</span><h2>What it is / isn’t</h2><span class="time">~1 min</span></header>
+      <p class="say">“Important positioning: this is not LeetCode, not trivia, and not a take-home form you hope they didn’t ChatGPT.
+
+It is a proving ground — full product and security challenges, a real browser IDE, sandboxed execution, evidence-based AI scoring, plus architecture, incidents, and team delivery.
+
+And the operating principle is non-negotiable: AI assists. Humans decide.”</p>
+      <p class="beat"><strong>Do:</strong> Hit the callout line slowly. If someone asks about AI bias, say scoring is evidence-bound and a reviewer still signs off.</p>
+    </article>
+
+    <article class="slide" id="s4">
+      <header><span class="num">04</span><h2>Three tracks</h2><span class="time">~1 min</span></header>
+      <p class="say">“There are three tracks.
+
+Software Engineering covers SaaS, realtime, distributed systems, databases — five challenges today.
+
+Cybersecurity is first-class, not an add-on — ten challenges spanning AppSec, cloud hardening, SOC and IR, cryptography, zero trust, detection, IAM, and more.
+
+Secure Full-Stack is product delivery with an elevated security bar — ecommerce, AI SaaS, incidents, team builds.
+
+Nineteen published challenges total. Same platform, different pressure profiles.”</p>
+      <p class="beat"><strong>Do:</strong> If the room is security-heavy, linger on the cyber row. If product/eng, emphasize secure full-stack as the bridge.</p>
+    </article>
+
+    <article class="slide" id="s5">
+      <header><span class="num">05</span><h2>Who goes through Crucible</h2><span class="time">~45 sec</span></header>
+      <p class="say">“The product maps to how hiring actually works.
+
+Hiring managers create assessments and assign candidates. Candidates build. Team members collaborate on shared delivery. Technical reviewers approve or reject with documented reasoning. Super admins own platform and AI configuration.
+
+So this isn’t only a candidate tool — it’s an operations surface for elite qualification.”</p>
+      <p class="beat"><strong>Do:</strong> One pass down the table. Don’t over-explain RBAC unless asked.</p>
+    </article>
+
+    <article class="slide" id="s6">
+      <header><span class="num">06</span><h2>End-to-end flow</h2><span class="time">~1.5 min</span></header>
+      <p class="say">“Here’s the loop, start to finish.
+
+One — pick a challenge from the library.
+Two — publish an assessment with a scoring policy.
+Three — assign the candidate; we provision an isolated workspace with starters and tests already placed.
+Four — they build in the IDE: commit, run public tests, hidden tests, deploy verification.
+Five — they submit; AI evaluates from evidence, not invented results.
+Six — they still have to prove more: architecture package, incident or SOC simulation, follow-ups, optional team challenge.
+Seven — a human reviewer decides.
+Eight — score report and skill lanes update.
+
+That’s the whole product story in eight steps.”</p>
+      <p class="beat"><strong>Do:</strong> Walk 1→8 with your finger or cursor. Emphasize steps 6 and 7 — this is where you differentiate from “CI turned green.”</p>
+    </article>
+
+    <article class="slide" id="s7">
+      <header><span class="num">07</span><h2>Platform surfaces</h2><span class="time">~1 min</span></header>
+      <p class="say">“If you’re wondering what lives in the product today: operations dashboards, challenge library, assessments, a full browser IDE, architecture submissions, incident sims, team challenges, and a technical review queue — plus admin for AI providers and security configuration.
+
+It’s mobile-friendly too, but the power demo is still the IDE and the review flow.”</p>
+      <p class="beat"><strong>Do:</strong> Don’t read every card. Name 4–5: Library, Assessments, IDE, Incidents, Review.</p>
+    </article>
+
+    <article class="slide" id="s8">
+      <header><span class="num">08</span><h2>Elite scoring bar</h2><span class="time">~1.5 min</span></header>
+      <p class="say">“Scoring is a hundred-point weighted model across ten categories — frontend through collaboration.
+
+For software engineering, backend and architecture carry the most weight. For cybersecurity, security jumps to twenty-five and problem-solving to fifteen. The track changes what ‘elite’ means.
+
+Qualification is intentionally hard: overall ninety or better, eighty percent in critical categories, successful deploy and hidden tests, incident recovery, architecture, team when required, no critical vulnerabilities — and a human must approve.
+
+We calibrate to challenge difficulty. We do not sell population percentiles.”</p>
+      <p class="beat"><strong>Do:</strong> Read the yellow callout almost verbatim — it’s your credibility slide. Pause after “human approval.”</p>
+    </article>
+
+    <article class="slide" id="s9">
+      <header><span class="num">09</span><h2>Four skill evidence lanes</h2><span class="time">~1 min</span></header>
+      <p class="say">“This is the hiring philosophy in one diagram.
+
+Claimed skills — what they say.
+Portfolio — what they link.
+Assessment-verified — what the assessment measured.
+Human-reviewed — what a reviewer signed.
+
+Most platforms collapse those into one green checkmark. We don’t. A résumé claim never graduates to ‘verified’ without evidence.”</p>
+      <p class="beat"><strong>Do:</strong> Contrast weak signals (top) vs measured/signed (bottom). Good Q&A hook.</p>
+    </article>
+
+    <article class="slide" id="s10">
+      <header><span class="num">10</span><h2>Trust &amp; execution</h2><span class="time">~1 min</span></header>
+      <p class="say">“For the technical audience: candidate code, uploads, and AI prompts are untrusted by default.
+
+Execution can run in a constrained process mode for demos, or Docker sandboxes with CPU, memory, and timeout limits. Production guidance is stronger isolation — microVMs or gVisor — not ‘mount the Docker socket and hope.’
+
+Stack is Next.js, TypeScript, Prisma on Postgres, Monaco editor, optional Redis worker.”</p>
+      <p class="beat"><strong>Do:</strong> Keep this short unless you’re in a security/architecture room — then offer to go deeper offline.</p>
+    </article>
+
+    <article class="slide" id="s11">
+      <header><span class="num">11</span><h2>Demo path</h2><span class="time">~30 sec setup + ~8 min live</span></header>
+      <p class="say">“If we have time, here’s the live path — about eight minutes.
+
+Hiring manager assigns from the library.
+Candidate opens the workspace, runs tests, submits.
+We glance the cybersecurity challenge library.
+We show incidents or architecture — proof it’s not just green CI.
+Reviewer makes the human call.
+
+Seed accounts are ready when demo env passwords are configured locally — never share those values in slides or chat.”</p>
+      <p class="beat"><strong>Do:</strong> If skipping live demo, say: “I’ll show this offline — the seeded environment already has assignments and workspaces with tests placed.” If demoing, switch windows now; keep this slide visible as a checklist.</p>
+    </article>
+
+    <article class="slide" id="s12">
+      <header><span class="num">12</span><h2>Close</h2><span class="time">~45 sec</span></header>
+      <p class="say">“Closing line: résumés claim. Crucible verifies.
+
+We’ve built an evidence pipeline for elite hiring — real builds, real security pressure, AI-assisted scoring, and a human final gate — so qualification means demonstrated ability.
+
+Happy to take questions — or jump straight into the product.”</p>
+      <p class="beat"><strong>Do:</strong> Stop talking. Hold the slide. First question usually comes on scoring, AI, or isolation — you’re ready from slides 8–10.</p>
+    </article>
+
+    <div class="meta" style="margin-top:24px">
+      <div><strong>Optional Q&amp;A anchors</strong></div>
+      <div>“How do you stop AI hallucination on scores?” → Evidence-bound evaluation; no invented test results; human gate.</div>
+      <div>“Is Docker enough?” → Demo mode yes; hostile prod workloads need stronger isolation (called out in docs).</div>
+      <div>“Why not just hackathons?” → Repeatable scoring policy, hidden tests, audit trail, reviewer accountability.</div>
+    </div>
+  </div>
+</body>
+</html>

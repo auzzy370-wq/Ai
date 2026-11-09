@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CRUCIBLE — Presentation</title>
+  <style>
+    :root {
+      --bg: #070b12;
+      --panel: #0b1220;
+      --line: #1f2a3d;
+      --text: #e5eefb;
+      --muted: #8aa0b8;
+      --accent: #ff5a1f;
+      --accent-dim: rgba(34, 211, 238, 0.12);
+      --warn: #fbbf24;
+      --ok: #34d399;
+      --danger: #fb7185;
+      --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+    body {
+      background:
+        radial-gradient(900px 480px at 12% -8%, rgba(34, 211, 238, 0.1), transparent 55%),
+        radial-gradient(700px 400px at 92% 8%, rgba(52, 211, 153, 0.06), transparent 50%),
+        linear-gradient(180deg, #070b12, #0b1220 55%, #060910);
+    }
+    .deck {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 18px 22px 16px;
+    }
+    .top, .bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .stage {
+      display: grid;
+      place-items: center;
+      min-height: 0;
+      padding: 12px 0 18px;
+    }
+    .slide {
+      display: none;
+      width: 100%;
+      max-width: 960px;
+      animation: rise 0.35s ease-out;
+    }
+    .slide.active { display: block; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.28em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: clamp(2rem, 4.4vw, 3.25rem);
+      line-height: 1.1;
+      margin: 0 0 14px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      font-size: clamp(1.05rem, 2vw, 1.25rem);
+      margin: 0 0 8px;
+      font-weight: 600;
+    }
+    .lede {
+      font-size: clamp(1.05rem, 2.1vw, 1.35rem);
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 46rem;
+      margin: 0 0 28px;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 760px) {
+      .grid.two, .grid.three { grid-template-columns: 1fr; }
+      .deck { padding: 14px 14px 12px; }
+    }
+    .card {
+      border: 1px solid var(--line);
+      background: rgba(11, 18, 32, 0.85);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .card p, .card li { color: var(--muted); line-height: 1.45; }
+    .card ul { margin: 0; padding-left: 1.1rem; }
+    .card li + li { margin-top: 0.45rem; }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 16px;
+      background: var(--accent-dim);
+    }
+    .stat .v {
+      font-family: var(--mono);
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .stat .l { color: var(--muted); font-size: 0.9rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    .steps li {
+      display: grid;
+      grid-template-columns: 2.2rem 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .n {
+      font-family: var(--mono);
+      color: var(--accent);
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      border-radius: 8px;
+      text-align: center;
+      padding: 4px 0;
+      font-size: 0.85rem;
+    }
+    .callout {
+      margin-top: 18px;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.08);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: #fde68a;
+      line-height: 1.45;
+    }
+    .callout.info {
+      border-color: rgba(34, 211, 238, 0.35);
+      background: var(--accent-dim);
+      color: #a5f3fc;
+    }
+    .dots { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+    .dot {
+      width: 9px; height: 9px; border-radius: 999px;
+      border: 0; padding: 0; cursor: pointer;
+      background: #243044;
+    }
+    .dot.on { background: var(--accent); }
+    .navbtn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #111827;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .navbtn:disabled { opacity: 0.35; cursor: default; }
+    .navbtn.primary {
+      background: var(--accent);
+      color: #041016;
+      border-color: transparent;
+      font-weight: 600;
+    }
+    .hint { opacity: 0.8; }
+    kbd {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="top">
+      <div>CRUCIBLE</div>
+      <div class="hint">Arrow keys · Space · <kbd>F</kbd> fullscreen</div>
+    </div>
+
+    <div class="stage">
+      <!-- 1 -->
+      <section class="slide active" data-title="Title">
+        <div class="eyebrow">Elite qualification platform</div>
+        <h1>CRUCIBLE</h1>
+        <p class="lede">Prove elite software engineering and cybersecurity ability with real systems — not puzzles, not résumés.</p>
+        <div class="grid three">
+          <div class="stat"><div class="v">19</div><div class="l">Challenges</div></div>
+          <div class="stat"><div class="v">3</div><div class="l">Tracks</div></div>
+          <div class="stat"><div class="v">≥90</div><div class="l">Elite qualification bar</div></div>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section class="slide" data-title="Problem">
+        <div class="eyebrow">Why this exists</div>
+        <h1>The hiring gap</h1>
+        <p class="lede">Traditional signals fail for senior and security talent.</p>
+        <div class="grid two">
+          <div class="card">
+            <h2>What breaks</h2>
+            <ul>
+              <li>Résumé claims ≠ competence</li>
+              <li>Whiteboard ≠ production ownership</li>
+              <li>LeetCode ≠ secure system delivery</li>
+              <li>Security screening bolted on — or skipped</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2>What replaces it</h2>
+            <ul>
+              <li>Isolated real-world challenges</li>
+              <li>Hidden tests + deploy verification</li>
+              <li>Incident / SOC pressure</li>
+              <li>Human final gate on evidence</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 -->
+      <section class="slide" data-title="Positioning">
+        <div class="eyebrow">Positioning</div>
+        <h1>What it is / isn’t</h1>
+        <div class="grid two">
+          <div class="card">
+            <h2>Is — a proving ground</h2>
+            <ul>
+              <li>Full product &amp; security challenges</li>
+              <li>Browser IDE + sandboxed execution</li>
+              <li>Evidence-based AI scoring</li>
+              <li>Architecture, incidents, team delivery</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2>Isn’t — another quiz</h2>
+            <ul>
+              <li>Not LeetCode / trivia</li>
+              <li>Not take-home form theater</li>
+              <li>Not “trust the CV”</li>
+              <li>Not AI auto-hire without humans</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout info"><strong>Operating principle:</strong> AI assists. Humans decide. Résumé claims never prove competence.</div>
+      </section>
+
+      <!-- 4 -->
+      <section class="slide" data-title="Tracks">
+        <div class="eyebrow">Challenge library</div>
+        <h1>Three tracks</h1>
+        <p class="lede">19 published challenges across software engineering, cybersecurity, and secure full-stack.</p>
+        <table>
+          <thead><tr><th>Track</th><th>Focus</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr><td>Software Engineering</td><td>SaaS, realtime, distributed, databases</td><td>5</td></tr>
+            <tr><td>Cybersecurity</td><td>AppSec, cloud, SOC/IR, crypto, zero trust, detection, IAM…</td><td>10</td></tr>
+            <tr><td>Secure Full-Stack</td><td>Product delivery with elevated security bar</td><td>4</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 5 -->
+      <section class="slide" data-title="Roles">
+        <div class="eyebrow">RBAC</div>
+        <h1>Who goes through Crucible</h1>
+        <table>
+          <thead><tr><th>Role</th><th>Responsibility</th></tr></thead>
+          <tbody>
+            <tr><td>Super Admin</td><td>Platform &amp; AI provider configuration</td></tr>
+            <tr><td>Hiring Manager</td><td>Create assessments, assign candidates, form teams</td></tr>
+            <tr><td>Technical Reviewer</td><td>Approve / reject with documented reasoning</td></tr>
+            <tr><td>Candidate</td><td>Build, test, submit, architecture, incidents</td></tr>
+            <tr><td>Team Member</td><td>Collaborative shared-product challenges</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 6 -->
+      <section class="slide" data-title="Workflow">
+        <div class="eyebrow">Core product loop</div>
+        <h1>End-to-end flow</h1>
+        <ol class="steps">
+          <li><span class="n">1</span><div><strong>Library</strong><br><span style="color:var(--muted)">Pick SE or cyber challenge</span></div></li>
+          <li><span class="n">2</span><div><strong>Assessment</strong><br><span style="color:var(--muted)">Publish with scoring policy</span></div></li>
+          <li><span class="n">3</span><div><strong>Assign</strong><br><span style="color:var(--muted)">Isolated workspace + starters / tests</span></div></li>
+          <li><span class="n">4</span><div><strong>Build</strong><br><span style="color:var(--muted)">IDE · commits · tests · hidden tests · deploy</span></div></li>
+          <li><span class="n">5</span><div><strong>Submit</strong><br><span style="color:var(--muted)">Evidence-based AI evaluation</span></div></li>
+          <li><span class="n">6</span><div><strong>Prove more</strong><br><span style="color:var(--muted)">Architecture · incident/SOC · follow-ups · team</span></div></li>
+          <li><span class="n">7</span><div><strong>Human gate</strong><br><span style="color:var(--muted)">Reviewer approve / reject</span></div></li>
+          <li><span class="n">8</span><div><strong>Outcome</strong><br><span style="color:var(--muted)">Score report + skill lanes updated</span></div></li>
+        </ol>
+      </section>
+
+      <!-- 7 -->
+      <section class="slide" data-title="Product">
+        <div class="eyebrow">Platform surfaces</div>
+        <h1>What you can show</h1>
+        <div class="grid two">
+          <div class="card"><h2>Operations</h2><p>Candidate assignments or staff analytics</p></div>
+          <div class="card"><h2>Challenge Library</h2><p>Filter by track · 19 challenges</p></div>
+          <div class="card"><h2>Assessments</h2><p>Create, assign, track workspaces</p></div>
+          <div class="card"><h2>Browser IDE</h2><p>Files, git, jobs, terminal</p></div>
+          <div class="card"><h2>Architecture</h2><p>Design package before build theater</p></div>
+          <div class="card"><h2>Incidents</h2><p>Production / SOC recovery sims</p></div>
+          <div class="card"><h2>Team Crucibles</h2><p>Shared delivery + discussion trail</p></div>
+          <div class="card"><h2>Technical Review</h2><p>Human decision queue</p></div>
+        </div>
+      </section>
+
+      <!-- 8 -->
+      <section class="slide" data-title="Scoring">
+        <div class="eyebrow">Credibility</div>
+        <h1>Elite scoring bar</h1>
+        <p class="lede">100-point weighted model. Cyber elevates security (25) and problem-solving (15).</p>
+        <div class="grid two">
+          <div class="card">
+            <h2>Software Engineering</h2>
+            <p>Backend 15 · Architecture 15<br>Most categories 10<br>Performance / Collaboration 5</p>
+          </div>
+          <div class="card">
+            <h2>Cybersecurity</h2>
+            <p>Security 25 · Problem-solving 15<br>Backend / Arch / Infra / Testing 10<br>Others 5</p>
+          </div>
+        </div>
+        <div class="callout"><strong>To qualify:</strong> overall ≥90 · critical categories ≥80% · deploy + hidden tests + incident + architecture (+ team) · no critical vulns · human approval</div>
+      </section>
+
+      <!-- 9 -->
+      <section class="slide" data-title="Skills">
+        <div class="eyebrow">Trust model</div>
+        <h1>Four skill evidence lanes</h1>
+        <p class="lede">Profiles separate claims from proof.</p>
+        <div class="grid two">
+          <div class="card"><h2>Claimed</h2><p>What they say on a résumé or profile</p></div>
+          <div class="card"><h2>Portfolio</h2><p>What they link — still unverified</p></div>
+          <div class="card"><h2>Assessment-verified</h2><p>What tests, deploys, and scoring measured</p></div>
+          <div class="card"><h2>Human-reviewed</h2><p>What a reviewer explicitly approved</p></div>
+        </div>
+      </section>
+
+      <!-- 10 -->
+      <section class="slide" data-title="Security">
+        <div class="eyebrow">Technical audience</div>
+        <h1>Trust &amp; execution</h1>
+        <div class="grid two">
+          <div class="card">
+            <h2>Untrusted by default</h2>
+            <ul>
+              <li>Candidate code</li>
+              <li>Uploads (résumé PDF)</li>
+              <li>AI prompts / model output</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2>Execution modes</h2>
+            <ul>
+              <li><code>process</code> — constrained local / Vercel demo</li>
+              <li><code>docker</code> — disposable containers, caps, timeouts</li>
+              <li>Prod guidance: microVMs / gVisor</li>
+            </ul>
+          </div>
+        </div>
+        <p class="lede" style="margin-top:18px;margin-bottom:0">Stack: Next.js · TypeScript · Prisma/Postgres · Monaco · optional Redis worker</p>
+      </section>
+
+      <!-- 11 -->
+      <section class="slide" data-title="Demo">
+        <div class="eyebrow">Live walkthrough</div>
+        <h1>Demo path (~8 min)</h1>
+        <ol class="steps">
+          <li><span class="n">1</span><div>Hiring → Assessments → assign from library</div></li>
+          <li><span class="n">2</span><div>Candidate → Open workspace → IDE / tests / submit</div></li>
+          <li><span class="n">3</span><div>Challenges → Cybersecurity track scan</div></li>
+          <li><span class="n">4</span><div>Incidents or Architecture — beyond green CI</div></li>
+          <li><span class="n">5</span><div>Reviewer → human approve / reject</div></li>
+        </ol>
+        <div style="height:18px"></div>
+        <table>
+          <thead><tr><th>Audience</th><th>Password</th></tr></thead>
+          <tbody>
+            <tr><td>admin / hiring / reviewer</td><td><code>(local env only)</code></td></tr>
+            <tr><td>candidate / cyber / teammate</td><td><code>(local env only)</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 12 -->
+      <section class="slide" data-title="Close">
+        <div class="eyebrow">Close</div>
+        <h1>Résumés claim.<br>Crucible verifies.</h1>
+        <p class="lede">An evidence pipeline for elite hiring: real builds, real security pressure, AI-assisted scoring, and a human final gate.</p>
+        <div class="grid three">
+          <div class="stat"><div class="v">Build</div><div class="l">Real systems</div></div>
+          <div class="stat"><div class="v">Secure</div><div class="l">First-class cyber</div></div>
+          <div class="stat"><div class="v">Decide</div><div class="l">Humans approve</div></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="bottom">
+      <button class="navbtn" id="prev" type="button">Previous</button>
+      <div class="dots" id="dots" aria-label="Slide dots"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="counter">1 / 12</span>
+        <button class="navbtn primary" id="next" type="button">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    const dots = document.getElementById("dots");
+    const counter = document.getElementById("counter");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    let i = 0;
+
+    slides.forEach((_, idx) => {
+      const b = document.createElement("button");
+      b.className = "dot" + (idx === 0 ? " on" : "");
+      b.type = "button";
+      b.setAttribute("aria-label", "Go to slide " + (idx + 1));
+      b.addEventListener("click", () => go(idx));
+      dots.appendChild(b);
+    });
+
+    function go(n) {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach((s, idx) => s.classList.toggle("active", idx === i));
+      [...dots.children].forEach((d, idx) => d.classList.toggle("on", idx === i));
+      counter.textContent = (i + 1) + " / " + slides.length;
+      prev.disabled = i === 0;
+      next.disabled = i === slides.length - 1;
+      history.replaceState(null, "", "#" + (i + 1));
+    }
+
+    prev.addEventListener("click", () => go(i - 1));
+    next.addEventListener("click", () => go(i + 1));
+
+    window.addEventListener("keydown", (e) => {
+      if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); go(i + 1); }
+      if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(i - 1); }
+      if (e.key === "Home") go(0);
+      if (e.key === "End") go(slides.length - 1);
+      if (e.key === "f" || e.key === "F") {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
+    });
+
+    const hash = Number((location.hash || "#1").slice(1));
+    go(Number.isFinite(hash) && hash > 0 ? hash - 1 : 0);
+  </script>
+</body>
+</html>
