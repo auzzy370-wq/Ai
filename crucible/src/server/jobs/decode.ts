@@ -25,6 +25,16 @@ export function summarizeJobText(raw: string | null | undefined, maxLen = 200): 
     /^(about (the )?(role|job|position|us)|overview|who we are|the role|job description)\s*[:.\-–—]?\s*/i,
     "",
   );
+  // Skip generic company mission openers (Cloudflare/Stripe/etc. paste the same paragraph).
+  text = text.replace(
+    /^At [A-Z][\w .,&-]{1,40}, we are on a mission[\s\S]{0,280}?(?=\b(?:Available|What you|What you'll|In this|You'll|You will|We are looking|We're looking|As a|This role)\b)/i,
+    "",
+  );
+  text = text.replace(
+    /^(Available Locations?:|Location:|Type:|Department:)[^.]*\.\s*/i,
+    "",
+  );
+  text = text.trim();
   if (text.length < 48) return null;
   if (text.length <= maxLen) return text;
   const cut = text.slice(0, maxLen - 1);
