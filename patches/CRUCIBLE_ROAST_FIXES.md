@@ -38,3 +38,6 @@ Production deploy: `vercel --prod` from local Crucible tree (GitHub push 403).
 
 Apply `crucible-full-original-bank.patch`: Practice defaults to the full
 ~4k question bank for guests; `?view=core` for hand-authored only.
+
+## Landing footnote (2026-11-09)
+Apply `crucible-landing-footnote.patch`: remove demo-seed / JUDGE_ONLINE from hero.
