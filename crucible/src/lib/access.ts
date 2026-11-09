@@ -87,7 +87,7 @@ export function homeForRole(role: string): string {
 }
 
 /** Paths guests can use without signing in (nav + page guards). */
-export const GUEST_FREE_PREFIXES = ["/learn", "/challenges"] as const;
+export const GUEST_FREE_PREFIXES = ["/learn", "/challenges", "/jobs"] as const;
 
 export function isGuestFreePath(pathname: string): boolean {
   return GUEST_FREE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

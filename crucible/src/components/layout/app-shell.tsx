@@ -110,13 +110,19 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 function isGuestOpen(href: string) {
-  return href === "/learn" || href.startsWith("/learn/") || href === "/challenges";
+  return (
+    href === "/learn" ||
+    href.startsWith("/learn/") ||
+    href === "/challenges" ||
+    href === "/jobs" ||
+    href.startsWith("/jobs/")
+  );
 }
 
 function visibleGroups(role: string, guest = false) {
   return NAV_GROUPS.map((group) => {
     if (group.roles && !group.roles.includes(role)) return null;
-    // Guests only see surfaces they can open — no Compete/Jobs tease → login bounce.
+    // Guests: Learn + Practice + Jobs. Compete stays signed-in.
     if (guest && (group.id === "compete" || group.id === "team-member")) return null;
     let items = group.items.filter((item) => !item.roles || item.roles.includes(role));
     if (guest) items = items.filter((item) => isGuestOpen(item.href));
@@ -314,6 +320,7 @@ export function AppShell({
       ? ([
           { href: "/learn", label: "Learn", icon: BookOpen },
           { href: "/challenges", label: "Practice", icon: Boxes },
+          { href: "/jobs", label: "Jobs", icon: Briefcase },
           { href: "/register", label: "Join", icon: UserRound },
         ] as const)
       : ([

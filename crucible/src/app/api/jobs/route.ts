@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { COMPANIES } from "@/lib/saas";
 import { jsonOk, withHandler } from "@/server/auth/api";
-import { requireUser } from "@/server/auth/session";
 import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
 
 const Query = z.object({
@@ -12,8 +11,6 @@ const Query = z.object({
 
 export async function GET(req: Request) {
   return withHandler(async () => {
-    await requireUser();
-
     const url = new URL(req.url);
     const parsed = Query.parse({
       company: url.searchParams.get("company") || undefined,

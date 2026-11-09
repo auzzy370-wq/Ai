@@ -59,6 +59,54 @@ export const HIDDEN_CASES: Record<string, HiddenCase[]> = {
     { id: "interleave", description: "Interleaved intents", evidenceTokens: ["map", "intent"] },
     { id: "retries", description: "Retry storm same id", evidenceTokens: ["duplicate", "map"] },
   ],
+  "lc-contains-duplicate": [
+    { id: "unique", description: "All unique large", evidenceTokens: ["set", "map"] },
+    { id: "pair_end", description: "Duplicate at ends", evidenceTokens: ["set"] },
+  ],
+  "lc-valid-anagram": [
+    { id: "len_mismatch", description: "Different lengths", evidenceTokens: ["length"] },
+    { id: "same_letters", description: "Permutation edge", evidenceTokens: ["count", "map"] },
+  ],
+  "lc-best-time-stock": [
+    { id: "flat", description: "Flat prices", evidenceTokens: ["min", "max"] },
+    { id: "late_min", description: "Min near end", evidenceTokens: ["min"] },
+  ],
+  "lc-binary-search": [
+    { id: "first", description: "Target is first", evidenceTokens: ["mid", "left"] },
+    { id: "last", description: "Target is last", evidenceTokens: ["mid", "right"] },
+  ],
+  "lc-climbing-stairs": [
+    { id: "one", description: "n = 1", evidenceTokens: ["1"] },
+    { id: "forty_five", description: "n = 45", evidenceTokens: ["dp", "a", "b"] },
+  ],
+  "lc-invert-tree": [
+    { id: "single", description: "Single node", evidenceTokens: ["left", "right"] },
+    { id: "skewed", description: "Left-skewed", evidenceTokens: ["left", "right"] },
+  ],
+  "lc-max-depth-tree": [
+    { id: "chain", description: "Skewed chain", evidenceTokens: ["max", "left"] },
+    { id: "balanced", description: "Balanced depth", evidenceTokens: ["max"] },
+  ],
+  "lc-product-except-self": [
+    { id: "two_zeros", description: "Two zeros", evidenceTokens: ["prefix", "suffix"] },
+    { id: "negatives", description: "All negatives", evidenceTokens: ["prefix"] },
+  ],
+  "lc-longest-substring": [
+    { id: "empty", description: "Empty string", evidenceTokens: ["set", "map"] },
+    { id: "all_unique", description: "All unique chars", evidenceTokens: ["set"] },
+  ],
+  "lc-group-anagrams": [
+    { id: "singles", description: "All unique", evidenceTokens: ["map", "sort"] },
+    { id: "empties", description: "Multiple empties", evidenceTokens: ["map"] },
+  ],
+  "lc-number-of-islands": [
+    { id: "single", description: "Single land cell", evidenceTokens: ["dfs", "bfs"] },
+    { id: "water", description: "All water", evidenceTokens: ["0"] },
+  ],
+  "lc-coin-change": [
+    { id: "zero", description: "amount 0", evidenceTokens: ["dp"] },
+    { id: "impossible", description: "Impossible set", evidenceTokens: ["dp"] },
+  ],
 };
 
 /** Build a Node harness snippet that imports solution + asserts hidden fixtures for TS workspaces. */
@@ -153,6 +201,137 @@ const results = [
 console.log(JSON.stringify({ results }));
 process.exit(results.every((r) => r.pass) ? 0 : 1);
 `;
+
+    case "lc-contains-duplicate":
+      return `import { containsDuplicate } from "../src/solution.ts";
+const big = Array.from({ length: 5000 }, (_, i) => i);
+const results = [
+  { name: "unique", pass: containsDuplicate(big) === false, hidden: true },
+  { name: "pair_end", pass: containsDuplicate([0, ...big.slice(1), 0]) === true, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-valid-anagram":
+      return `import { isAnagram } from "../src/solution.ts";
+const results = [
+  { name: "len_mismatch", pass: isAnagram("ab", "a") === false, hidden: true },
+  { name: "same_letters", pass: isAnagram("aacc", "ccac") === false && isAnagram("aacc", "ccaa") === true, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-best-time-stock":
+      return `import { maxProfit } from "../src/solution.ts";
+const results = [
+  { name: "flat", pass: maxProfit([3, 3, 3, 3]) === 0, hidden: true },
+  { name: "late_min", pass: maxProfit([5, 4, 3, 2, 10]) === 8, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-binary-search":
+      return `import { search } from "../src/solution.ts";
+const nums = Array.from({ length: 1000 }, (_, i) => i * 2);
+const results = [
+  { name: "first", pass: search(nums, 0) === 0, hidden: true },
+  { name: "last", pass: search(nums, 1998) === 999, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-climbing-stairs":
+      return `import { climbStairs } from "../src/solution.ts";
+const results = [
+  { name: "one", pass: climbStairs(1) === 1, hidden: true },
+  { name: "forty_five", pass: climbStairs(45) === 1836311903, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-invert-tree":
+      return `import { invertTree, type TreeNode } from "../src/solution.ts";
+function node(val: number, left: TreeNode | null = null, right: TreeNode | null = null): TreeNode {
+  return { val, left, right };
+}
+function same(a: TreeNode | null, b: TreeNode | null): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.val === b.val && same(a.left, b.left) && same(a.right, b.right);
+}
+const single = node(1);
+const skewed = node(1, node(2, node(3), null), null);
+const results = [
+  { name: "single", pass: same(invertTree(single), node(1)), hidden: true },
+  { name: "skewed", pass: same(invertTree(skewed), node(1, null, node(2, null, node(3)))), hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-max-depth-tree":
+      return `import { maxDepth, type TreeNode } from "../src/solution.ts";
+function node(val: number, left: TreeNode | null = null, right: TreeNode | null = null): TreeNode {
+  return { val, left, right };
+}
+let chain: TreeNode | null = null;
+for (let i = 0; i < 20; i++) chain = node(i, chain, null);
+const results = [
+  { name: "chain", pass: maxDepth(chain) === 20, hidden: true },
+  { name: "balanced", pass: maxDepth(node(1, node(2, node(3), node(4)), node(5))) === 3, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-product-except-self":
+      return `import { productExceptSelf } from "../src/solution.ts";
+function eq(a: number[], b: number[]) { return a.length === b.length && a.every((v, i) => v === b[i]); }
+const results = [
+  { name: "two_zeros", pass: eq(productExceptSelf([0, 1, 0]), [0, 0, 0]), hidden: true },
+  { name: "negatives", pass: eq(productExceptSelf([-1, -2, -3]), [6, 3, 2]), hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-longest-substring":
+      return `import { lengthOfLongestSubstring } from "../src/solution.ts";
+const results = [
+  { name: "empty", pass: lengthOfLongestSubstring("") === 0, hidden: true },
+  { name: "all_unique", pass: lengthOfLongestSubstring("abcdef") === 6, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-group-anagrams":
+      return `import { groupAnagrams } from "../src/solution.ts";
+function norm(groups: string[][]) {
+  return groups.map((g) => [...g].sort().join("\\0")).sort().join("|");
+}
+const results = [
+  { name: "singles", pass: norm(groupAnagrams(["a", "b", "c"])) === norm([["a"], ["b"], ["c"]]), hidden: true },
+  { name: "empties", pass: norm(groupAnagrams(["", ""])) === norm([["", ""]]), hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-number-of-islands":
+      return `import { numIslands } from "../src/solution.ts";
+const results = [
+  { name: "single", pass: numIslands([["1"]]) === 1, hidden: true },
+  { name: "water", pass: numIslands([["0", "0"], ["0", "0"]]) === 0, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+    case "lc-coin-change":
+      return `import { coinChange } from "../src/solution.ts";
+const results = [
+  { name: "zero", pass: coinChange([1, 2, 5], 0) === 0, hidden: true },
+  { name: "impossible", pass: coinChange([3, 5], 1) === -1, hidden: true },
+];
+console.log(JSON.stringify({ results }));
+process.exit(results.every((r) => r.pass) ? 0 : 1);
+`;
+
     default: {
       const family = familyHarnessForSlug(slug);
       return family?.hiddenRunner ?? null;

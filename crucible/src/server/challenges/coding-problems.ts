@@ -467,6 +467,375 @@ charge("b", 5)  → { status: "ok", totalCharged: 15 }
     adaptiveTrack: [{ level: 1, title: "Idempotency key", criteria: "Hidden pass" }],
     gradingRubric: { backend: "Exactly-once effects", reliability: "Retry safety" },
   },
+
+  {
+    slug: "lc-contains-duplicate",
+    title: "13. Contains Duplicate",
+    summary: "Return true if any value appears at least twice.",
+    description: `Given an integer array \`nums\`, return \`true\` if any value appears **at least twice** in the array, and return \`false\` if every element is distinct.
+
+## Examples
+- \`[1,2,3,1]\` → \`true\`
+- \`[1,2,3,4]\` → \`false\`
+- \`[1,1,1,3,3,4,3,2,4,2]\` → \`true\`
+
+## Constraints
+- \`1 <= nums.length <= 10^5\`
+- \`-10^9 <= nums[i] <= 10^9\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 2,
+    estimatedDays: 1,
+    tags: ["coding", "array", "hash-table", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Amazon", "Apple", "Google"],
+    frequency: 86,
+    avgMinutes: 15,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Large n", "All unique"],
+    adaptiveTrack: [{ level: 1, title: "Set scan", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness", performance: "O(n)" },
+  },
+  {
+    slug: "lc-valid-anagram",
+    title: "14. Valid Anagram",
+    summary: "Check whether two strings are anagrams.",
+    description: `Given two strings \`s\` and \`t\`, return \`true\` if \`t\` is an anagram of \`s\`, and \`false\` otherwise.
+
+## Examples
+- \`s = "anagram", t = "nagaram"\` → \`true\`
+- \`s = "rat", t = "car"\` → \`false\`
+
+## Constraints
+- \`1 <= s.length, t.length <= 5 * 10^4\`
+- \`s\` and \`t\` consist of lowercase English letters.`,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 2,
+    estimatedDays: 1,
+    tags: ["coding", "string", "hash-table", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Meta", "Bloomberg", "Microsoft"],
+    frequency: 82,
+    avgMinutes: 15,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Different lengths", "Unicode-safe for a-z"],
+    adaptiveTrack: [{ level: 1, title: "Counts", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
+  {
+    slug: "lc-best-time-stock",
+    title: "15. Best Time to Buy and Sell Stock",
+    summary: "Max profit from one buy and one sell.",
+    description: `You are given an array \`prices\` where \`prices[i]\` is the price of a given stock on the \`i\`th day.
+
+You want to maximize your profit by choosing a **single day** to buy one stock and choosing a **different day in the future** to sell that stock.
+
+Return the maximum profit. If you cannot achieve any profit, return \`0\`.
+
+## Examples
+- \`[7,1,5,3,6,4]\` → \`5\` (buy 1, sell 6)
+- \`[7,6,4,3,1]\` → \`0\`
+
+## Constraints
+- \`1 <= prices.length <= 10^5\`
+- \`0 <= prices[i] <= 10^4\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 3,
+    estimatedDays: 1,
+    tags: ["coding", "array", "dp", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Amazon", "Google", "Bloomberg"],
+    frequency: 90,
+    avgMinutes: 20,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Strictly decreasing", "Large n"],
+    adaptiveTrack: [{ level: 1, title: "One pass min", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness", performance: "O(n)" },
+  },
+  {
+    slug: "lc-binary-search",
+    title: "16. Binary Search",
+    summary: "Find target index in a sorted array or return -1.",
+    description: `Given an array of integers \`nums\` sorted in ascending order and an integer \`target\`, write a function to search \`target\` in \`nums\`. If \`target\` exists, return its index. Otherwise, return \`-1\`.
+
+You must write an algorithm with \`O(log n)\` runtime complexity.
+
+## Examples
+- \`nums = [-1,0,3,5,9,12], target = 9\` → \`4\`
+- \`nums = [-1,0,3,5,9,12], target = 2\` → \`-1\`
+
+## Constraints
+- \`1 <= nums.length <= 10^4\`
+- \`-10^4 < nums[i], target < 10^4\`
+- All integers in \`nums\` are **unique**
+- \`nums\` is sorted in ascending order`,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 2,
+    estimatedDays: 1,
+    tags: ["coding", "binary-search", "array", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Meta", "Microsoft", "Apple"],
+    frequency: 88,
+    avgMinutes: 15,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["First/last element", "Missing target"],
+    adaptiveTrack: [{ level: 1, title: "Binary search", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness", performance: "O(log n)" },
+  },
+  {
+    slug: "lc-climbing-stairs",
+    title: "17. Climbing Stairs",
+    summary: "Count distinct ways to climb n steps taking 1 or 2 at a time.",
+    description: `You are climbing a staircase. It takes \`n\` steps to reach the top.
+
+Each time you can either climb \`1\` or \`2\` steps. In how many distinct ways can you climb to the top?
+
+## Examples
+- \`n = 2\` → \`2\` (1+1, 2)
+- \`n = 3\` → \`3\` (1+1+1, 1+2, 2+1)
+
+## Constraints
+- \`1 <= n <= 45\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 2,
+    estimatedDays: 1,
+    tags: ["coding", "dp", "math", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Amazon", "Adobe", "Apple"],
+    frequency: 80,
+    avgMinutes: 15,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["n=1", "n=45"],
+    adaptiveTrack: [{ level: 1, title: "Fibonacci DP", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
+  {
+    slug: "lc-invert-tree",
+    title: "18. Invert Binary Tree",
+    summary: "Mirror a binary tree.",
+    description: `Given the \`root\` of a binary tree, invert the tree, and return its root.
+
+## Examples
+- \`[4,2,7,1,3,6,9]\` → \`[4,7,2,9,6,3,1]\`
+- \`[2,1,3]\` → \`[2,3,1]\`
+- \`[]\` → \`[]\`
+
+TreeNode is provided as \`{ val: number; left: TreeNode | null; right: TreeNode | null }\`.
+
+## Constraints
+- Number of nodes in \`[0, 100]\`
+- \`-100 <= Node.val <= 100\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 3,
+    estimatedDays: 1,
+    tags: ["coding", "tree", "dfs", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Google", "Meta", "Amazon"],
+    frequency: 85,
+    avgMinutes: 20,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Skewed tree", "Single node"],
+    adaptiveTrack: [{ level: 1, title: "Recurse/BFS", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
+  {
+    slug: "lc-max-depth-tree",
+    title: "19. Maximum Depth of Binary Tree",
+    summary: "Return the max depth of a binary tree.",
+    description: `Given the \`root\` of a binary tree, return its maximum depth.
+
+A binary tree's maximum depth is the number of nodes along the longest path from the root node down to the farthest leaf node.
+
+## Examples
+- \`[3,9,20,null,null,15,7]\` → \`3\`
+- \`[1,null,2]\` → \`2\`
+
+## Constraints
+- Number of nodes in \`[0, 10^4]\`
+- \`-100 <= Node.val <= 100\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 2,
+    estimatedDays: 1,
+    tags: ["coding", "tree", "dfs", "easy"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["LinkedIn", "Amazon", "Microsoft"],
+    frequency: 78,
+    avgMinutes: 15,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Empty tree", "Skewed chain"],
+    adaptiveTrack: [{ level: 1, title: "DFS depth", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
+  {
+    slug: "lc-product-except-self",
+    title: "20. Product of Array Except Self",
+    summary: "Return product of all elements except nums[i] without division.",
+    description: `Given an integer array \`nums\`, return an array \`answer\` such that \`answer[i]\` is equal to the product of all the elements of \`nums\` except \`nums[i]\`.
+
+The product of any prefix or suffix of \`nums\` is **guaranteed** to fit in a 32-bit integer.
+
+You must write an algorithm that runs in \`O(n)\` time and without using the division operation.
+
+## Examples
+- \`[1,2,3,4]\` → \`[24,12,8,6]\`
+- \`[-1,1,0,-3,3]\` → \`[0,0,9,0,0]\`
+
+## Constraints
+- \`2 <= nums.length <= 10^5\`
+- \`-30 <= nums[i] <= 30\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 5,
+    estimatedDays: 1,
+    tags: ["coding", "array", "prefix", "medium"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Meta", "Amazon", "Apple"],
+    frequency: 87,
+    avgMinutes: 25,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Zeros", "Negatives"],
+    adaptiveTrack: [{ level: 1, title: "Prefix/suffix", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness", performance: "O(n) no division" },
+  },
+  {
+    slug: "lc-longest-substring",
+    title: "21. Longest Substring Without Repeating Characters",
+    summary: "Length of the longest substring without repeating characters.",
+    description: `Given a string \`s\`, find the length of the longest substring without repeating characters.
+
+## Examples
+- \`"abcabcbb"\` → \`3\` (\`"abc"\`)
+- \`"bbbbb"\` → \`1\`
+- \`"pwwkew"\` → \`3\` (\`"wke"\`)
+
+## Constraints
+- \`0 <= s.length <= 5 * 10^4\`
+- \`s\` consists of English letters, digits, symbols and spaces.`,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 5,
+    estimatedDays: 1,
+    tags: ["coding", "string", "sliding-window", "medium"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Amazon", "Bloomberg", "Adobe"],
+    frequency: 93,
+    avgMinutes: 30,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["Empty string", "All unique"],
+    adaptiveTrack: [{ level: 1, title: "Sliding window", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness", performance: "O(n)" },
+  },
+  {
+    slug: "lc-group-anagrams",
+    title: "22. Group Anagrams",
+    summary: "Group strings that are anagrams of each other.",
+    description: `Given an array of strings \`strs\`, group the anagrams together. You can return the answer in **any order**.
+
+## Examples
+- \`["eat","tea","tan","ate","nat","bat"]\` → \`[["bat"],["nat","tan"],["ate","eat","tea"]]\`
+- \`[""]\` → \`[[""]]\`
+- \`["a"]\` → \`[["a"]]\`
+
+## Constraints
+- \`1 <= strs.length <= 10^4\`
+- \`0 <= strs[i].length <= 100\`
+- \`strs[i]\` consists of lowercase English letters.`,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 5,
+    estimatedDays: 1,
+    tags: ["coding", "hash-table", "string", "medium"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Uber", "Meta", "Amazon"],
+    frequency: 84,
+    avgMinutes: 25,
+    isPremium: false,
+    publicRequirements: ["Groups match ignoring order"],
+    hiddenRequirements: ["Empty strings", "Large n"],
+    adaptiveTrack: [{ level: 1, title: "Sorted key map", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
+  {
+    slug: "lc-number-of-islands",
+    title: "23. Number of Islands",
+    summary: "Count islands of '1's in a 2D grid.",
+    description: `Given an \`m x n\` 2D binary grid \`grid\` which represents a map of \`'1'\`s (land) and \`'0'\`s (water), return the number of islands.
+
+An island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically. You may assume all four edges of the grid are surrounded by water.
+
+## Examples
+- Grid with two land blobs → \`2\`
+- All water → \`0\`
+
+## Constraints
+- \`m == grid.length\`
+- \`n == grid[i].length\`
+- \`1 <= m, n <= 300\`
+- \`grid[i][j]\` is \`'0'\` or \`'1'\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 6,
+    estimatedDays: 1,
+    tags: ["coding", "graph", "dfs", "bfs", "medium"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Amazon", "Google", "Meta"],
+    frequency: 89,
+    avgMinutes: 30,
+    isPremium: false,
+    publicRequirements: ["Public grids pass"],
+    hiddenRequirements: ["Single cell", "Checkerboard"],
+    adaptiveTrack: [{ level: 1, title: "Flood fill", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
+  {
+    slug: "lc-coin-change",
+    title: "24. Coin Change",
+    summary: "Fewest coins to make amount, or -1.",
+    description: `You are given an integer array \`coins\` representing coins of different denominations and an integer \`amount\` representing a total amount of money.
+
+Return the fewest number of coins that you need to make up that amount. If that amount of money cannot be made up by any combination of the coins, return \`-1\`.
+
+You may assume that you have an infinite number of each kind of coin.
+
+## Examples
+- \`coins = [1,2,5], amount = 11\` → \`3\` (5+5+1)
+- \`coins = [2], amount = 3\` → \`-1\`
+- \`coins = [1], amount = 0\` → \`0\`
+
+## Constraints
+- \`1 <= coins.length <= 12\`
+- \`1 <= coins[i] <= 2^31 - 1\`
+- \`0 <= amount <= 10^4\``,
+    type: "CODING_PROBLEM",
+    track: "SOFTWARE_ENGINEERING",
+    difficulty: 6,
+    estimatedDays: 1,
+    tags: ["coding", "dp", "medium"],
+    languages: ["typescript", "javascript", "python", "go", "rust", "java"],
+    companies: ["Amazon", "Microsoft", "Uber"],
+    frequency: 81,
+    avgMinutes: 30,
+    isPremium: false,
+    publicRequirements: ["Public examples pass"],
+    hiddenRequirements: ["amount 0", "Impossible amount"],
+    adaptiveTrack: [{ level: 1, title: "Unbounded knapsack DP", criteria: "Public + hidden pass" }],
+    gradingRubric: { backend: "Correctness" },
+  },
 ];
 
 export function isCodingProblem(challenge: { type?: string; tags?: string[]; slug?: string }) {

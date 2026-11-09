@@ -350,6 +350,299 @@ export async function runPublicTests() {
       { id: "retries", description: "Retry storm same id" },
     ],
   },
+
+  "lc-contains-duplicate": {
+    solutionStub: `export function containsDuplicate(nums: number[]): boolean {
+  void nums;
+  return false;
+}
+`,
+    publicTests: `import { containsDuplicate } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: containsDuplicate([1, 2, 3, 1]) === true },
+    { name: "example_2", pass: containsDuplicate([1, 2, 3, 4]) === false },
+    { name: "example_3", pass: containsDuplicate([1, 1, 1, 3, 3, 4, 3, 2, 4, 2]) === true },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "unique", description: "All unique large" },
+      { id: "pair_end", description: "Duplicate at ends" },
+    ],
+  },
+  "lc-valid-anagram": {
+    solutionStub: `export function isAnagram(s: string, t: string): boolean {
+  void s;
+  void t;
+  return false;
+}
+`,
+    publicTests: `import { isAnagram } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: isAnagram("anagram", "nagaram") === true },
+    { name: "example_2", pass: isAnagram("rat", "car") === false },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "len_mismatch", description: "Different lengths" },
+      { id: "same_letters", description: "Permutation edge" },
+    ],
+  },
+  "lc-best-time-stock": {
+    solutionStub: `export function maxProfit(prices: number[]): number {
+  void prices;
+  return 0;
+}
+`,
+    publicTests: `import { maxProfit } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: maxProfit([7, 1, 5, 3, 6, 4]) === 5 },
+    { name: "example_2", pass: maxProfit([7, 6, 4, 3, 1]) === 0 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "flat", description: "Flat prices" },
+      { id: "late_min", description: "Min near end" },
+    ],
+  },
+  "lc-binary-search": {
+    solutionStub: `export function search(nums: number[], target: number): number {
+  void nums;
+  void target;
+  return -1;
+}
+`,
+    publicTests: `import { search } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: search([-1, 0, 3, 5, 9, 12], 9) === 4 },
+    { name: "example_2", pass: search([-1, 0, 3, 5, 9, 12], 2) === -1 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "first", description: "Target is first" },
+      { id: "last", description: "Target is last" },
+    ],
+  },
+  "lc-climbing-stairs": {
+    solutionStub: `export function climbStairs(n: number): number {
+  void n;
+  return 0;
+}
+`,
+    publicTests: `import { climbStairs } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: climbStairs(2) === 2 },
+    { name: "example_2", pass: climbStairs(3) === 3 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "one", description: "n = 1" },
+      { id: "forty_five", description: "n = 45" },
+    ],
+  },
+  "lc-invert-tree": {
+    solutionStub: `export type TreeNode = { val: number; left: TreeNode | null; right: TreeNode | null };
+
+export function invertTree(root: TreeNode | null): TreeNode | null {
+  void root;
+  return null;
+}
+`,
+    publicTests: `import { invertTree, type TreeNode } from "../src/solution.ts";
+
+function node(val: number, left: TreeNode | null = null, right: TreeNode | null = null): TreeNode {
+  return { val, left, right };
+}
+function same(a: TreeNode | null, b: TreeNode | null): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.val === b.val && same(a.left, b.left) && same(a.right, b.right);
+}
+
+export async function runPublicTests() {
+  const input = node(2, node(1), node(3));
+  const expected = node(2, node(3), node(1));
+  return [
+    { name: "example_small", pass: same(invertTree(input), expected) },
+    { name: "empty", pass: invertTree(null) === null },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "single", description: "Single node" },
+      { id: "skewed", description: "Left-skewed" },
+    ],
+  },
+  "lc-max-depth-tree": {
+    solutionStub: `export type TreeNode = { val: number; left: TreeNode | null; right: TreeNode | null };
+
+export function maxDepth(root: TreeNode | null): number {
+  void root;
+  return 0;
+}
+`,
+    publicTests: `import { maxDepth, type TreeNode } from "../src/solution.ts";
+
+function node(val: number, left: TreeNode | null = null, right: TreeNode | null = null): TreeNode {
+  return { val, left, right };
+}
+
+export async function runPublicTests() {
+  const t = node(3, node(9), node(20, node(15), node(7)));
+  return [
+    { name: "example_1", pass: maxDepth(t) === 3 },
+    { name: "example_2", pass: maxDepth(node(1, null, node(2))) === 2 },
+    { name: "empty", pass: maxDepth(null) === 0 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "chain", description: "Skewed chain" },
+      { id: "balanced", description: "Balanced depth" },
+    ],
+  },
+  "lc-product-except-self": {
+    solutionStub: `export function productExceptSelf(nums: number[]): number[] {
+  void nums;
+  return [];
+}
+`,
+    publicTests: `import { productExceptSelf } from "../src/solution.ts";
+
+function eq(a: number[], b: number[]) {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: eq(productExceptSelf([1, 2, 3, 4]), [24, 12, 8, 6]) },
+    { name: "example_2", pass: eq(productExceptSelf([-1, 1, 0, -3, 3]), [0, 0, 9, 0, 0]) },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "two_zeros", description: "Two zeros" },
+      { id: "negatives", description: "All negatives" },
+    ],
+  },
+  "lc-longest-substring": {
+    solutionStub: `export function lengthOfLongestSubstring(s: string): number {
+  void s;
+  return 0;
+}
+`,
+    publicTests: `import { lengthOfLongestSubstring } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: lengthOfLongestSubstring("abcabcbb") === 3 },
+    { name: "example_2", pass: lengthOfLongestSubstring("bbbbb") === 1 },
+    { name: "example_3", pass: lengthOfLongestSubstring("pwwkew") === 3 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "empty", description: "Empty string" },
+      { id: "all_unique", description: "All unique chars" },
+    ],
+  },
+  "lc-group-anagrams": {
+    solutionStub: `export function groupAnagrams(strs: string[]): string[][] {
+  void strs;
+  return [];
+}
+`,
+    publicTests: `import { groupAnagrams } from "../src/solution.ts";
+
+function norm(groups: string[][]) {
+  return groups
+    .map((g) => [...g].sort().join("\\0"))
+    .sort()
+    .join("|");
+}
+
+export async function runPublicTests() {
+  const got = norm(groupAnagrams(["eat", "tea", "tan", "ate", "nat", "bat"]));
+  const expect = norm([["bat"], ["nat", "tan"], ["ate", "eat", "tea"]]);
+  return [
+    { name: "example_1", pass: got === expect },
+    { name: "empty", pass: norm(groupAnagrams([""])) === norm([[""]]) },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "singles", description: "All unique" },
+      { id: "empties", description: "Multiple empties" },
+    ],
+  },
+  "lc-number-of-islands": {
+    solutionStub: `export function numIslands(grid: string[][]): number {
+  void grid;
+  return 0;
+}
+`,
+    publicTests: `import { numIslands } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  const g1 = [
+    ["1", "1", "0", "0", "0"],
+    ["1", "1", "0", "0", "0"],
+    ["0", "0", "1", "0", "0"],
+    ["0", "0", "0", "1", "1"],
+  ];
+  const g2 = [
+    ["1", "1", "1"],
+    ["0", "1", "0"],
+    ["1", "1", "1"],
+  ];
+  return [
+    { name: "example_1", pass: numIslands(g1.map((r) => [...r])) === 3 },
+    { name: "connected", pass: numIslands(g2.map((r) => [...r])) === 1 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "single", description: "Single land cell" },
+      { id: "water", description: "All water" },
+    ],
+  },
+  "lc-coin-change": {
+    solutionStub: `export function coinChange(coins: number[], amount: number): number {
+  void coins;
+  void amount;
+  return -1;
+}
+`,
+    publicTests: `import { coinChange } from "../src/solution.ts";
+
+export async function runPublicTests() {
+  return [
+    { name: "example_1", pass: coinChange([1, 2, 5], 11) === 3 },
+    { name: "example_2", pass: coinChange([2], 3) === -1 },
+    { name: "example_3", pass: coinChange([1], 0) === 0 },
+  ];
+}
+`,
+    hiddenHints: [
+      { id: "zero", description: "amount 0" },
+      { id: "impossible", description: "Impossible set" },
+    ],
+  },
+
 };
 
 function pythonStub(slug: string): string {

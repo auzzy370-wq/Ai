@@ -35,3 +35,9 @@ Crucible remote push is denied for `cursor[bot]` — ship via this tree + Cursor
 - SSO deployment protection disabled
 - Judge offline (`JUDGE_ONLINE` unset/false); mock billing off
 - Demo seed applied (hand-authored + volume bank in DB; UI defaults to core)
+
+## 2026-11-09 — Jobs + bank
+
+- Guests: Learn + Practice + Jobs (`GUEST_FREE_PREFIXES`, nav, `/api/jobs` no auth).
+- Hand-authored coding bank: 24 `lc-*` problems (starters + hidden harness).
+- Neon upserted; deploy via `vercel --prod` (Crucible GitHub push still 403 for this agent).
