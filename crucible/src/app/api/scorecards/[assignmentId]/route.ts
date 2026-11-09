@@ -111,7 +111,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ assignmentId: s
 <html><head><meta charset="utf-8"/><title>Crucible Scorecard</title>
 <style>
   body{font-family:IBM Plex Sans,Segoe UI,sans-serif;background:#0b1220;color:#e5eefb;padding:32px;max-width:800px;margin:0 auto}
-  h1{letter-spacing:.2em;font-size:14px;color:#7c3aed}
+  h1{letter-spacing:.2em;font-size:14px;color:#ff5a1f}
   h2{font-size:28px;margin:.4rem 0 1rem}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .cell{border:1px solid #1f2a3d;border-radius:8px;padding:10px 12px;font-family:ui-monospace,monospace;font-size:13px}
