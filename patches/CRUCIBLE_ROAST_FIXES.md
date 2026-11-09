@@ -41,3 +41,6 @@ Apply `crucible-full-original-bank.patch`: Practice defaults to the full
 
 ## Landing footnote (2026-11-09)
 Apply `crucible-landing-footnote.patch`: remove demo-seed / JUDGE_ONLINE from hero.
+
+## Purple brand (2026-11-09)
+Apply `crucible-purple-brand.patch`: orange → purple across tokens + logo.
