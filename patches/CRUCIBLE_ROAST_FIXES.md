@@ -53,3 +53,6 @@ Apply `crucible-revert-purple-to-orange.patch` after the purple brand patch (or 
 
 ## Jobs yearly pay (2026-11-09)
 Apply `crucible-jobs-yearly-pay.patch`: parse and show yearly salary ranges when listed.
+
+## Jobs descriptions + speed (2026-11-09)
+Apply `crucible-jobs-desc-speed.patch`: short blurbs, SSR warm, parallel fetches, client filters.
