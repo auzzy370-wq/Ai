@@ -33,3 +33,8 @@ Apply `crucible-jobs-bank-expand.patch` on Crucible `cursor/roast-fixes-8ab9` (o
 - Neon: upsert CODING_PROBLEM_CATALOG (24 `lc-*`)
 
 Production deploy: `vercel --prod` from local Crucible tree (GitHub push 403).
+
+## Full original bank (2026-11-09)
+
+Apply `crucible-full-original-bank.patch`: Practice defaults to the full
+~4k question bank for guests; `?view=core` for hand-authored only.
