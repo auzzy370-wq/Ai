@@ -20,6 +20,13 @@ export type JobPosting = {
   url: string;
   source: JobSource;
   postedAt?: string | null;
+  /** Yearly pay floor when the posting discloses it. */
+  salaryMin?: number | null;
+  /** Yearly pay ceiling when the posting discloses it. */
+  salaryMax?: number | null;
+  /** Display string, e.g. "$166,000 – $208,000 / year". */
+  salaryLabel?: string | null;
+  salaryCurrency?: string | null;
 };
 
 export type JobBoardResult = {

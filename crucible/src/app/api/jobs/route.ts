@@ -38,9 +38,23 @@ export async function GET(req: Request) {
           j.title.toLowerCase().includes(needle) ||
           j.location.toLowerCase().includes(needle) ||
           (j.team?.toLowerCase().includes(needle) ?? false) ||
-          j.company.toLowerCase().includes(needle),
+          j.company.toLowerCase().includes(needle) ||
+          (j.salaryLabel?.toLowerCase().includes(needle) ?? false),
       );
     }
+
+    // Prefer postings that disclose yearly pay, then higher midpoints.
+    jobs = [...jobs].sort((a, b) => {
+      const aPay = a.salaryMin != null && a.salaryMax != null;
+      const bPay = b.salaryMin != null && b.salaryMax != null;
+      if (aPay !== bPay) return aPay ? -1 : 1;
+      if (aPay && bPay) {
+        const aMid = ((a.salaryMin ?? 0) + (a.salaryMax ?? 0)) / 2;
+        const bMid = ((b.salaryMin ?? 0) + (b.salaryMax ?? 0)) / 2;
+        return bMid - aMid;
+      }
+      return 0;
+    });
 
     const byCompany = Object.fromEntries(
       board.results.map((r) => [

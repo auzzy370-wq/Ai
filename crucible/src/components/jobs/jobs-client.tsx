@@ -86,11 +86,15 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
         </h1>
         <p className="mt-2 max-w-2xl text-slate-600">
           Aggregated public postings for software engineering and cybersecurity (Greenhouse and company career
-          sites) — not Crucible-hosted applications. Apply on the employer&apos;s page; prep here with a matching mock.
+          sites) — not Crucible-hosted applications. When a posting discloses pay, we show the yearly range.
+          Apply on the employer&apos;s page; prep here with a matching mock.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <Briefcase className="h-3.5 w-3.5" />
           <span>{jobs.length} roles shown</span>
+          {jobs.some((j) => j.salaryLabel) ? (
+            <span>· {jobs.filter((j) => j.salaryLabel).length} with listed yearly pay</span>
+          ) : null}
           {refreshedAt && (
             <span>
               · refreshed <LocalTime value={refreshedAt} />
@@ -223,6 +227,16 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
                   </div>
                   <h2 className="font-serif-display text-lg text-slate-900">{job.title}</h2>
                   <p className="text-sm text-slate-600">{job.location}</p>
+                  {job.salaryLabel ? (
+                    <p className="text-sm font-medium text-slate-900">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--brand)]">
+                        Yearly pay
+                      </span>
+                      <span className="mt-0.5 block">{job.salaryLabel}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-400">Yearly pay not listed on this posting</p>
+                  )}
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                   <a href={job.url} target="_blank" rel="noopener noreferrer" className="sm:w-auto">

@@ -1,5 +1,6 @@
 import type { JobCompany, JobPosting, JobSource } from "./types";
 import { decodeHtml, looksLikeEngRole, titleFromSlug } from "./decode";
+import { parseYearlySalary } from "./salary";
 
 /** Merge board pages / keyword searches and keep first occurrence per id. */
 export function mergeJobLists(...lists: JobPosting[][]): JobPosting[] {
@@ -51,21 +52,51 @@ function post(
   return { company, source, ...partial };
 }
 
+function withSalary(
+  partial: Omit<JobPosting, "company" | "source">,
+  text: string | null | undefined,
+): Omit<JobPosting, "company" | "source"> {
+  const sal = parseYearlySalary(text);
+  if (!sal) return partial;
+  return {
+    ...partial,
+    salaryMin: sal.min,
+    salaryMax: sal.max,
+    salaryLabel: sal.label,
+    salaryCurrency: sal.currency,
+  };
+}
+
 export async function fetchGreenhouse(company: JobCompany, board: string): Promise<JobPosting[]> {
+  // content=true includes description HTML — needed for CA/NY pay ranges.
   const data = await fetchJson<{
-    jobs?: { id: number; title: string; absolute_url: string; location?: { name?: string }; updated_at?: string }[];
-  }>(`https://boards-api.greenhouse.io/v1/boards/${board}/jobs`);
+    jobs?: {
+      id: number;
+      title: string;
+      absolute_url: string;
+      location?: { name?: string };
+      updated_at?: string;
+      content?: string;
+    }[];
+  }>(`https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`);
   return (data.jobs ?? [])
     .filter((j) => looksLikeEngRole(j.title))
     .slice(0, 80)
     .map((j) =>
-      post(company, "greenhouse", {
-        id: `gh-${board}-${j.id}`,
-        title: decodeHtml(j.title),
-        location: j.location?.name?.trim() || "See posting",
-        url: j.absolute_url,
-        postedAt: j.updated_at ?? null,
-      }),
+      post(
+        company,
+        "greenhouse",
+        withSalary(
+          {
+            id: `gh-${board}-${j.id}`,
+            title: decodeHtml(j.title),
+            location: j.location?.name?.trim() || "See posting",
+            url: j.absolute_url,
+            postedAt: j.updated_at ?? null,
+          },
+          j.content,
+        ),
+      ),
     );
 }
 
@@ -82,6 +113,8 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
       country_code?: string;
       posted_date?: string;
       job_category?: string;
+      description?: string;
+      basic_qualifications?: string;
     }[];
   }>(url);
   return (data.jobs ?? [])
@@ -90,14 +123,21 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
     .map((j) => {
       const id = String(j.id || j.job_id || "");
       const path = j.job_path?.startsWith("/") ? j.job_path : `/en/jobs/${id}`;
-      return post("Amazon", "amazon", {
-        id: `amzn-${id}`,
-        title: decodeHtml(j.title!),
-        location: [j.city || j.location, j.country_code].filter(Boolean).join(", ") || "See posting",
-        team: j.job_category || undefined,
-        url: `https://www.amazon.jobs${path}`,
-        postedAt: j.posted_date ?? null,
-      });
+      return post(
+        "Amazon",
+        "amazon",
+        withSalary(
+          {
+            id: `amzn-${id}`,
+            title: decodeHtml(j.title!),
+            location: [j.city || j.location, j.country_code].filter(Boolean).join(", ") || "See posting",
+            team: j.job_category || undefined,
+            url: `https://www.amazon.jobs${path}`,
+            postedAt: j.posted_date ?? null,
+          },
+          `${j.description || ""}\n${j.basic_qualifications || ""}`,
+        ),
+      );
     });
 }
 
@@ -169,19 +209,27 @@ export async function fetchNetflix(query = "software engineer"): Promise<JobPost
       department?: string;
       canonicalPositionUrl?: string;
       t_create?: string;
+      job_description?: string;
     }[];
   }>(url);
   return (data.positions ?? [])
     .filter((p) => looksLikeEngRole(p.name))
     .map((p) =>
-      post("Netflix", "netflix", {
-        id: `nflx-${p.id}`,
-        title: decodeHtml(p.name),
-        location: (p.locations?.[0] || p.location || "See posting").replace(/,/g, ", "),
-        team: p.department,
-        url: p.canonicalPositionUrl || `https://explore.jobs.netflix.net/careers/job/${p.id}`,
-        postedAt: p.t_create ?? null,
-      }),
+      post(
+        "Netflix",
+        "netflix",
+        withSalary(
+          {
+            id: `nflx-${p.id}`,
+            title: decodeHtml(p.name),
+            location: (p.locations?.[0] || p.location || "See posting").replace(/,/g, ", "),
+            team: p.department,
+            url: p.canonicalPositionUrl || `https://explore.jobs.netflix.net/careers/job/${p.id}`,
+            postedAt: p.t_create ?? null,
+          },
+          p.job_description,
+        ),
+      ),
     );
 }
 
@@ -200,16 +248,24 @@ export async function fetchShopify(): Promise<JobPosting[]> {
     const url = pick(chunk, "applyUrl") || pick(chunk, "url") || pick(chunk, "link");
     const location = pick(chunk, "location") || pick(chunk, "city") || "See posting";
     const team = pick(chunk, "department") || pick(chunk, "workplaceTypes") || undefined;
+    const description = pick(chunk, "description");
     const id = pick(chunk, "partnerJobId") || pick(chunk, "id") || url;
     if (!title || !url || !looksLikeEngRole(title)) continue;
     jobs.push(
-      post("Shopify", "shopify", {
-        id: `shopify-${id}`,
-        title,
-        location,
-        team,
-        url: url.split("?")[0] || url,
-      }),
+      post(
+        "Shopify",
+        "shopify",
+        withSalary(
+          {
+            id: `shopify-${id}`,
+            title,
+            location,
+            team,
+            url: url.split("?")[0] || url,
+          },
+          description,
+        ),
+      ),
     );
     if (jobs.length >= 80) break;
   }
