@@ -43,18 +43,18 @@ export default async function ChallengesPage({
 }) {
   const sp = await searchParams;
   const user = await getSessionUser();
-  const trackFilter = sp.track ? { track: sp.track as never } : {};
-  // Generated volume bank is signed-in only (not for guests / marketing).
-  const wantGenerated = sp.view === "generated" || sp.track === "generated";
-  const includeGenerated = Boolean(user) && wantGenerated;
-  // Default first paint: hand-authored only (exclude procedural q-* / exp-* volume bank).
-  const coreOnly = includeGenerated
-    ? {}
-    : {
+  const trackFilter = sp.track && sp.track !== "generated" ? { track: sp.track as never } : {};
+  // Full original bank is the default (hand-authored + question-bank volume).
+  // Opt into hand-authored-only with ?view=core.
+  const coreOnlyView = sp.view === "core";
+  const includeGenerated = !coreOnlyView;
+  const coreOnly = coreOnlyView
+    ? {
         NOT: {
           OR: [{ slug: { startsWith: "q-" } }, { slug: { startsWith: "exp-" } }],
         },
-      };
+      }
+    : {};
 
   const codingWhere = { isPublished: true, type: "CODING_PROBLEM" as const, ...trackFilter, ...coreOnly };
   const projectWhere = {
@@ -172,7 +172,7 @@ export default async function ChallengesPage({
         checkoutAvailable={checkoutAvailable}
         judgeOnline={judge.online}
         difficultyCounts={difficultyCounts}
-        trackFilter={sp.track && sp.track !== "generated" ? sp.track : null}
+        trackFilter={sp.track && sp.track !== "generated" && sp.track !== "core" ? sp.track : null}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AssessmentTrack, ChallengeType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { jsonOk, withHandler } from "@/server/auth/api";
-import { requireUser, canAdmin } from "@/server/auth/session";
+import { requireUser, getSessionUser, canAdmin } from "@/server/auth/session";
 import { AppError } from "@/lib/errors";
 import { editorialSlugByChallengeSlug, resolveEditorialSlug } from "@/server/saas/editorials";
 
@@ -28,8 +28,9 @@ export async function GET(req: Request) {
       "";
     const skip = Math.max(Number(searchParams.get("skip") || 0), 0);
     const take = Math.min(Math.max(Number(searchParams.get("take") || 50), 1), 100);
-    const library = searchParams.get("library")?.trim() || "core";
-    const user = await requireUser();
+    // Default: full original bank. Guests may browse; writes still require admin.
+    const library = searchParams.get("library")?.trim() || "all";
+    const user = await getSessionUser();
 
     let typeFilter: Prisma.ChallengeWhereInput = {};
     if (typeRaw === "CODING_PROBLEM") {
@@ -82,26 +83,26 @@ export async function GET(req: Request) {
           slug: true,
           title: true,
           summary: true,
-          description: canAdmin(user.role),
-          type: true,
-          track: true,
-          difficulty: true,
-          estimatedDays: true,
-          tags: true,
-          companies: true,
-          frequency: true,
-          avgMinutes: true,
-          isPremium: true,
-          languages: true,
-          publicRequirements: true,
-          owaspMappings: true,
-          mitreMappings: true,
-          assessments: {
-            where: { status: "PUBLISHED" },
-            take: 1,
-            select: { id: true },
-          },
+        description: Boolean(user && canAdmin(user.role)),
+        type: true,
+        track: true,
+        difficulty: true,
+        estimatedDays: true,
+        tags: true,
+        companies: true,
+        frequency: true,
+        avgMinutes: true,
+        isPremium: true,
+        languages: true,
+        publicRequirements: true,
+        owaspMappings: true,
+        mitreMappings: true,
+        assessments: {
+          where: { status: "PUBLISHED" },
+          take: 1,
+          select: { id: true },
         },
+      },
       }),
       editorialSlugByChallengeSlug(),
       // Band totals for the coding library (ignore active difficulty so pills stay honest).
@@ -149,7 +150,7 @@ export async function GET(req: Request) {
         slug: c.slug,
         title: c.title,
         summary: c.summary,
-        description: canAdmin(user.role) ? c.description : undefined,
+        description: user && canAdmin(user.role) ? c.description : undefined,
         type: c.type,
         track: c.track,
         difficulty: c.difficulty,

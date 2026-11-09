@@ -412,42 +412,25 @@ export function Problemset(props: {
           <p className="mt-2 max-w-2xl text-slate-600">
             Timed coding and production missions in TypeScript, JavaScript, Python, Go, Rust, and Java. Showing the{" "}
             <span className="font-medium text-slate-800">
-              {props.includeGenerated ? "full library (includes generated variants)" : "hand-authored core"}
+              {props.includeGenerated
+                ? "full original bank (hand-authored + practice volume)"
+                : "hand-authored core only"}
             </span>{" "}
             ({libraryTotal.toLocaleString()} {mode === "problemset" ? "coding problems" : "missions"}
             ). Public checks first; hidden Docker harnesses decide Accepted.
           </p>
           <p className="mt-2 max-w-2xl text-xs text-slate-500" title={FREQUENCY_METHODOLOGY.detail}>
             Freq: {FREQUENCY_METHODOLOGY.label}. Acc: live when ≥3 hidden submits, otherwise{" "}
-            {ACCEPTANCE_METHODOLOGY.short}.
-            {props.signedIn &&
-              props.libraryAllTotals &&
-              props.libraryAllTotals.coding + props.libraryAllTotals.projects >
-                (props.libraryTotals?.coding ?? 0) + (props.libraryTotals?.projects ?? 0) && (
-                <>
-                  {" "}
-                  Extra practice volume available after you opt in below.
-                </>
-              )}
+            {ACCEPTANCE_METHODOLOGY.short}. Volume rows are family practice variants, not claimed company leaks.
           </p>
           <div className="mt-3">
             {props.includeGenerated ? (
-              <Link href="/challenges" className="text-xs font-medium text-orange-700 hover:underline">
-                ← Back to hand-authored core
-              </Link>
-            ) : props.signedIn ? (
-              <Link
-                href="/challenges?view=generated"
-                className="text-xs font-medium text-slate-600 hover:text-orange-700 hover:underline"
-              >
-                Practice volume (generated variants) →
+              <Link href="/challenges?view=core" className="text-xs font-medium text-slate-600 hover:text-orange-700 hover:underline">
+                Hand-authored core only →
               </Link>
             ) : (
-              <Link
-                href="/login?next=/challenges%3Fview%3Dgenerated"
-                className="text-xs font-medium text-slate-500 hover:underline"
-              >
-                Sign in for generated practice volume →
+              <Link href="/challenges" className="text-xs font-medium text-orange-700 hover:underline">
+                ← Full original bank ({(props.libraryAllTotals?.coding ?? libraryTotal).toLocaleString()})
               </Link>
             )}
           </div>
