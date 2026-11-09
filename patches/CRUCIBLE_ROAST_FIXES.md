@@ -23,3 +23,13 @@ git push -u origin cursor/roast-fixes-8ab9
 ## Live demo (ephemeral)
 
 When the agent VM is up: check the active Cloudflare quick tunnel. Prefer local `http://localhost:3847`.
+
+## Jobs + bank (2026-11-09)
+
+Apply `crucible-jobs-bank-expand.patch` on Crucible `cursor/roast-fixes-8ab9` (or main after cherry-pick):
+
+- Guest Jobs: `GUEST_FREE_PREFIXES`, page guard, `/api/jobs`, nav
+- +12 hand-authored `lc-*` problems (starters + hidden harness)
+- Neon: upsert CODING_PROBLEM_CATALOG (24 `lc-*`)
+
+Production deploy: `vercel --prod` from local Crucible tree (GitHub push 403).
