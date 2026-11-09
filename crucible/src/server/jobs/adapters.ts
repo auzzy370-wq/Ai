@@ -1,5 +1,5 @@
 import type { JobCompany, JobPosting, JobSource } from "./types";
-import { decodeHtml, looksLikeEngRole, titleFromSlug } from "./decode";
+import { decodeHtml, looksLikeEngRole, summarizeJobText, titleFromSlug } from "./decode";
 import { parseYearlySalary } from "./salary";
 
 /** Merge board pages / keyword searches and keep first occurrence per id. */
@@ -52,18 +52,23 @@ function post(
   return { company, source, ...partial };
 }
 
-function withSalary(
+function enrichFromText(
   partial: Omit<JobPosting, "company" | "source">,
   text: string | null | undefined,
 ): Omit<JobPosting, "company" | "source"> {
   const sal = parseYearlySalary(text);
-  if (!sal) return partial;
+  const summary = summarizeJobText(text) ?? partial.summary ?? null;
   return {
     ...partial,
-    salaryMin: sal.min,
-    salaryMax: sal.max,
-    salaryLabel: sal.label,
-    salaryCurrency: sal.currency,
+    ...(summary ? { summary } : {}),
+    ...(sal
+      ? {
+          salaryMin: sal.min,
+          salaryMax: sal.max,
+          salaryLabel: sal.label,
+          salaryCurrency: sal.currency,
+        }
+      : {}),
   };
 }
 
@@ -86,7 +91,7 @@ export async function fetchGreenhouse(company: JobCompany, board: string): Promi
       post(
         company,
         "greenhouse",
-        withSalary(
+        enrichFromText(
           {
             id: `gh-${board}-${j.id}`,
             title: decodeHtml(j.title),
@@ -114,6 +119,7 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
       posted_date?: string;
       job_category?: string;
       description?: string;
+      description_short?: string;
       basic_qualifications?: string;
     }[];
   }>(url);
@@ -123,10 +129,11 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
     .map((j) => {
       const id = String(j.id || j.job_id || "");
       const path = j.job_path?.startsWith("/") ? j.job_path : `/en/jobs/${id}`;
+      const body = `${j.description_short || ""}\n${j.description || ""}\n${j.basic_qualifications || ""}`;
       return post(
         "Amazon",
         "amazon",
-        withSalary(
+        enrichFromText(
           {
             id: `amzn-${id}`,
             title: decodeHtml(j.title!),
@@ -134,8 +141,9 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
             team: j.job_category || undefined,
             url: `https://www.amazon.jobs${path}`,
             postedAt: j.posted_date ?? null,
+            summary: summarizeJobText(j.description_short) ?? undefined,
           },
-          `${j.description || ""}\n${j.basic_qualifications || ""}`,
+          body,
         ),
       );
     });
@@ -159,6 +167,7 @@ export async function fetchGoogle(query = "Software Engineer"): Promise<JobPosti
         id: `goog-${id}`,
         title,
         location: "See posting",
+        summary: `${title} at Google — open the official careers posting for the full description.`,
         url: `https://www.google.com/about/careers/applications/jobs/results/${id}-${slug}`,
       }),
     );
@@ -190,6 +199,7 @@ export async function fetchApple(query = "software engineer"): Promise<JobPostin
         id: `apple-${id}`,
         title,
         location: "See posting",
+        summary: `${title} at Apple — open the official jobs posting for the full description.`,
         url: `https://jobs.apple.com${m[1]}`,
       }),
     );
@@ -218,7 +228,7 @@ export async function fetchNetflix(query = "software engineer"): Promise<JobPost
       post(
         "Netflix",
         "netflix",
-        withSalary(
+        enrichFromText(
           {
             id: `nflx-${p.id}`,
             title: decodeHtml(p.name),
@@ -255,7 +265,7 @@ export async function fetchShopify(): Promise<JobPosting[]> {
       post(
         "Shopify",
         "shopify",
-        withSalary(
+        enrichFromText(
           {
             id: `shopify-${id}`,
             title,
@@ -315,6 +325,7 @@ export async function fetchLinkedInCompany(
         id: `li-${company}-${c.url.match(/(\d+)\/?$/)?.[1] || i}`,
         title: c.title,
         location: c.location,
+        summary: `${c.title} at ${company} — open the LinkedIn listing for the full description.`,
         url: c.url,
       }),
     );

@@ -17,6 +17,8 @@ export type JobPosting = {
   title: string;
   location: string;
   team?: string;
+  /** Short plain-text blurb from the posting when available. */
+  summary?: string | null;
   url: string;
   source: JobSource;
   postedAt?: string | null;

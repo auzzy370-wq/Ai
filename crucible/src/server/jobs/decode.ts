@@ -12,6 +12,25 @@ export function decodeHtml(input: string): string {
     .trim();
 }
 
+/** Short plain-text blurb for Jobs cards (from posting HTML/text). */
+export function summarizeJobText(raw: string | null | undefined, maxLen = 200): string | null {
+  if (!raw) return null;
+  let text = decodeHtml(raw)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  text = text.replace(
+    /^(about (the )?(role|job|position|us)|overview|who we are|the role|job description)\s*[:.\-–—]?\s*/i,
+    "",
+  );
+  if (text.length < 48) return null;
+  if (text.length <= maxLen) return text;
+  const cut = text.slice(0, maxLen - 1);
+  return `${cut.replace(/\s+\S*$/, "").replace(/[.,;:\-–—\s]+$/, "")}…`;
+}
+
 export function titleFromSlug(slug: string): string {
   return decodeHtml(
     slug

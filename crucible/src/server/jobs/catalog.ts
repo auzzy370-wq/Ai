@@ -123,15 +123,20 @@ const CAREERS_SEARCH_CYBER: Record<JobCompany, { url: string; source: JobSource 
 
 function browseFallback(company: JobCompany, focus: "engineering" | "cybersecurity" = "engineering"): JobPosting {
   const dest = focus === "cybersecurity" ? CAREERS_SEARCH_CYBER[company] : CAREERS_SEARCH[company];
+  const title =
+    focus === "cybersecurity"
+      ? `Browse ${company} cybersecurity roles`
+      : `Browse ${company} engineering roles`;
   return {
     id: `browse-${focus}-${company}`,
     company,
-    title:
-      focus === "cybersecurity"
-        ? `Browse ${company} cybersecurity roles`
-        : `Browse ${company} engineering roles`,
+    title,
     location: "Official careers site",
     team: focus === "cybersecurity" ? "Security search" : "Open search",
+    summary:
+      focus === "cybersecurity"
+        ? `Jump to ${company}'s official careers search for security and cybersecurity openings.`
+        : `Jump to ${company}'s official careers search for software and engineering openings.`,
     url: dest.url,
     source: dest.source,
   };
@@ -144,55 +149,45 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
     switch (company) {
       case "Google":
         jobs = mergeJobLists(
-          await fetchGoogle("Software Engineer"),
-          await fetchGoogle("Security Engineer"),
-          await fetchGoogle("Cybersecurity"),
+          ...(await Promise.all([
+            fetchGoogle("Software Engineer"),
+            fetchGoogle("Security Engineer"),
+            fetchGoogle("Cybersecurity"),
+          ])),
         );
         break;
       case "Amazon":
         jobs = mergeJobLists(
-          await fetchAmazon("software engineer"),
-          await fetchAmazon("security engineer"),
-          await fetchAmazon("cybersecurity"),
+          ...(await Promise.all([
+            fetchAmazon("software engineer"),
+            fetchAmazon("security engineer"),
+            fetchAmazon("cybersecurity"),
+          ])),
         );
         break;
       case "Meta":
         jobs = mergeJobLists(
-          await fetchLinkedInCompany("Meta", {
-            companyId: 10667,
-            keywords: "software engineer",
-          }),
-          await fetchLinkedInCompany("Meta", {
-            companyId: 10667,
-            keywords: "security engineer",
-          }),
-          await fetchLinkedInCompany("Meta", {
-            companyId: 10667,
-            keywords: "cybersecurity",
-          }),
+          ...(await Promise.all([
+            fetchLinkedInCompany("Meta", { companyId: 10667, keywords: "software engineer" }),
+            fetchLinkedInCompany("Meta", { companyId: 10667, keywords: "security engineer" }),
+          ])),
         );
         break;
       case "Apple":
         jobs = mergeJobLists(
-          await fetchApple("software engineer"),
-          await fetchApple("security engineer"),
-          await fetchApple("cybersecurity"),
+          ...(await Promise.all([
+            fetchApple("software engineer"),
+            fetchApple("security engineer"),
+            fetchApple("cybersecurity"),
+          ])),
         );
         break;
       case "Microsoft":
         jobs = mergeJobLists(
-          await fetchLinkedInCompany("Microsoft", {
-            companyId: 1035,
-            keywords: "software engineer",
-          }),
-          await fetchLinkedInCompany("Microsoft", {
-            companyId: 1035,
-            keywords: "security engineer",
-          }),
-          await fetchLinkedInCompany("Microsoft", {
-            companyId: 1035,
-            keywords: "cybersecurity",
-          }),
+          ...(await Promise.all([
+            fetchLinkedInCompany("Microsoft", { companyId: 1035, keywords: "software engineer" }),
+            fetchLinkedInCompany("Microsoft", { companyId: 1035, keywords: "security engineer" }),
+          ])),
         );
         break;
       case "Stripe":
@@ -201,25 +196,25 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
         break;
       case "Netflix":
         jobs = mergeJobLists(
-          await fetchNetflix("software engineer"),
-          await fetchNetflix("security engineer"),
-          await fetchNetflix("cybersecurity"),
+          ...(await Promise.all([
+            fetchNetflix("software engineer"),
+            fetchNetflix("security engineer"),
+            fetchNetflix("cybersecurity"),
+          ])),
         );
         break;
       case "Uber":
         jobs = mergeJobLists(
-          await fetchLinkedInCompany("Uber", {
-            keywords: 'Uber "Software Engineer"',
-            requireCompanyName: "Uber",
-          }),
-          await fetchLinkedInCompany("Uber", {
-            keywords: 'Uber "Security Engineer"',
-            requireCompanyName: "Uber",
-          }),
-          await fetchLinkedInCompany("Uber", {
-            keywords: "Uber cybersecurity",
-            requireCompanyName: "Uber",
-          }),
+          ...(await Promise.all([
+            fetchLinkedInCompany("Uber", {
+              keywords: 'Uber "Software Engineer"',
+              requireCompanyName: "Uber",
+            }),
+            fetchLinkedInCompany("Uber", {
+              keywords: 'Uber "Security Engineer"',
+              requireCompanyName: "Uber",
+            }),
+          ])),
         );
         break;
       case "Cloudflare":
@@ -227,34 +222,24 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
         break;
       case "Bloomberg":
         jobs = mergeJobLists(
-          await fetchLinkedInCompany("Bloomberg", {
-            keywords: 'Bloomberg "Software Engineer"',
-            requireCompanyName: "Bloomberg",
-          }),
-          await fetchLinkedInCompany("Bloomberg", {
-            keywords: 'Bloomberg "Security Engineer"',
-            requireCompanyName: "Bloomberg",
-          }),
-          await fetchLinkedInCompany("Bloomberg", {
-            keywords: "Bloomberg cybersecurity",
-            requireCompanyName: "Bloomberg",
-          }),
+          ...(await Promise.all([
+            fetchLinkedInCompany("Bloomberg", {
+              keywords: 'Bloomberg "Software Engineer"',
+              requireCompanyName: "Bloomberg",
+            }),
+            fetchLinkedInCompany("Bloomberg", {
+              keywords: 'Bloomberg "Security Engineer"',
+              requireCompanyName: "Bloomberg",
+            }),
+          ])),
         );
         break;
       case "LinkedIn":
         jobs = mergeJobLists(
-          await fetchLinkedInCompany("LinkedIn", {
-            companyId: 1337,
-            keywords: "software engineer",
-          }),
-          await fetchLinkedInCompany("LinkedIn", {
-            companyId: 1337,
-            keywords: "security engineer",
-          }),
-          await fetchLinkedInCompany("LinkedIn", {
-            companyId: 1337,
-            keywords: "cybersecurity",
-          }),
+          ...(await Promise.all([
+            fetchLinkedInCompany("LinkedIn", { companyId: 1337, keywords: "software engineer" }),
+            fetchLinkedInCompany("LinkedIn", { companyId: 1337, keywords: "security engineer" }),
+          ])),
         );
         break;
       case "Shopify":
@@ -278,14 +263,19 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
   }
 }
 
-/** Sequential with a short gap so LinkedIn guest endpoints stay polite. */
+/** Parallel company refresh with bounded concurrency (keeps LinkedIn polite). */
 async function refreshAll(): Promise<JobBoardResult[]> {
-  const results: JobBoardResult[] = [];
-  for (const company of COMPANIES) {
-    results.push(await loadCompany(company));
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  return results;
+  const companies = [...COMPANIES];
+  const out: JobBoardResult[] = new Array(companies.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(4, companies.length) }, async () => {
+    while (next < companies.length) {
+      const idx = next++;
+      out[idx] = await loadCompany(companies[idx]!);
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }
 
 export async function getJobBoard(opts?: { force?: boolean }): Promise<{

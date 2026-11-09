@@ -31,29 +31,66 @@ const FOCUS_OPTIONS: { id: JobFocus; label: string }[] = [
   { id: "cybersecurity", label: "Cybersecurity" },
 ];
 
-export function JobsClient(props: { companies: readonly JobCompany[] }) {
+function looksLikeCyber(title: string) {
+  return /\b(cyber\s*security|cybersecurity|information security|infosec|appsec|product security|application security|security engineer|security analyst|security architect|security researcher|security consultant|penetration|pen\s*test|red team|blue team|purple team|threat intel|threat intelligence|threat detection|detection engineer|soc analyst|soc engineer|incident response|malware|vulnerability|offensive security|defensive security|cloud security|network security|identity security|zero[\s-]?trust|cryptograph|ciso|grc|devsecops|secure coding)\b/i.test(
+    title,
+  );
+}
+
+function matchesFocus(title: string, focus: JobFocus) {
+  if (focus === "all") return true;
+  if (focus === "cybersecurity") return looksLikeCyber(title);
+  return !looksLikeCyber(title);
+}
+
+function sortJobs(list: JobPosting[]) {
+  return [...list].sort((a, b) => {
+    const aPay = a.salaryMin != null && a.salaryMax != null;
+    const bPay = b.salaryMin != null && b.salaryMax != null;
+    if (aPay !== bPay) return aPay ? -1 : 1;
+    if (aPay && bPay) {
+      const aMid = ((a.salaryMin ?? 0) + (a.salaryMax ?? 0)) / 2;
+      const bMid = ((b.salaryMin ?? 0) + (b.salaryMax ?? 0)) / 2;
+      return bMid - aMid;
+    }
+    return 0;
+  });
+}
+
+export function JobsClient(props: {
+  companies: readonly JobCompany[];
+  initialJobs?: JobPosting[];
+  initialByCompany?: Record<string, BoardMeta>;
+  initialRefreshedAt?: string | null;
+}) {
   const [company, setCompany] = useState<string>("All");
   const [focus, setFocus] = useState<JobFocus>("all");
   const [q, setQ] = useState("");
-  const [jobs, setJobs] = useState<JobPosting[]>([]);
-  const [byCompany, setByCompany] = useState<Record<string, BoardMeta>>({});
-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [boardJobs, setBoardJobs] = useState<JobPosting[]>(props.initialJobs ?? []);
+  const [byCompany, setByCompany] = useState<Record<string, BoardMeta>>(props.initialByCompany ?? {});
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(props.initialRefreshedAt ?? null);
+  const [loading, setLoading] = useState(!(props.initialJobs && props.initialJobs.length));
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
   const load = useCallback(async (refresh = false) => {
-    setLoading(true);
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (company !== "All") params.set("company", company);
-      if (focus !== "all") params.set("focus", focus);
-      if (q.trim()) params.set("q", q.trim());
+      // Pull the full board once; filters stay client-side for snappy focus/search.
       if (refresh) params.set("refresh", "1");
       const res = await fetch(`/api/jobs?${params.toString()}`);
       const json = await res.json();
       if (!json.ok) throw new Error(json.error?.message || "Could not load jobs");
-      setJobs(json.data.jobs);
+      setBoardJobs(json.data.jobs ?? []);
       setByCompany(json.data.byCompany ?? {});
       setRefreshedAt(json.data.refreshedAt ?? null);
     } catch (e) {
@@ -62,12 +99,42 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
       toast.error(msg);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [company, focus, q]);
+  }, []);
 
   useEffect(() => {
+    if (props.initialJobs && props.initialJobs.length) return;
     void load(false);
-  }, [load]);
+  }, [load, props.initialJobs]);
+
+  const jobs = useMemo(() => {
+    const needle = debouncedQ.toLowerCase();
+    const filtered = boardJobs.filter((j) => {
+      if (company !== "All" && j.company !== company) return false;
+      if (!matchesFocus(j.title, focus)) return false;
+      if (!needle) return true;
+      return (
+        j.title.toLowerCase().includes(needle) ||
+        j.location.toLowerCase().includes(needle) ||
+        (j.team?.toLowerCase().includes(needle) ?? false) ||
+        j.company.toLowerCase().includes(needle) ||
+        (j.summary?.toLowerCase().includes(needle) ?? false) ||
+        (j.salaryLabel?.toLowerCase().includes(needle) ?? false)
+      );
+    });
+    return sortJobs(filtered);
+  }, [boardJobs, company, focus, debouncedQ]);
+
+  const companyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of props.companies) counts[c] = 0;
+    for (const j of boardJobs) {
+      if (!matchesFocus(j.title, focus)) continue;
+      counts[j.company] = (counts[j.company] ?? 0) + 1;
+    }
+    return counts;
+  }, [boardJobs, focus, props.companies]);
 
   const failing = useMemo(
     () =>
@@ -77,6 +144,8 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
     [byCompany],
   );
 
+  const busy = loading || refreshing;
+
   return (
     <div className="animate-rise space-y-6">
       <header className="rounded-2xl border border-[var(--brand)]/30 bg-[var(--surface-elevated)] p-5 sm:p-7">
@@ -85,9 +154,8 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
           Official openings from company career boards
         </h1>
         <p className="mt-2 max-w-2xl text-slate-600">
-          Aggregated public postings for software engineering and cybersecurity (Greenhouse and company career
-          sites) — not Crucible-hosted applications. When a posting discloses pay, we show the yearly range.
-          Apply on the employer&apos;s page; prep here with a matching mock.
+          Aggregated public postings for software engineering and cybersecurity — not Crucible-hosted applications.
+          Cards include a short description and yearly pay when the employer lists it.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <Briefcase className="h-3.5 w-3.5" />
@@ -100,6 +168,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
               · refreshed <LocalTime value={refreshedAt} />
             </span>
           )}
+          {refreshing ? <span>· updating feeds…</span> : null}
         </div>
       </header>
 
@@ -150,9 +219,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
               )}
             >
               {c}
-              {byCompany[c] ? (
-                <span className="ml-1 text-[10px] text-slate-500">{byCompany[c]!.count}</span>
-              ) : null}
+              <span className="ml-1 text-[10px] text-slate-500">{companyCounts[c] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -164,24 +231,18 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
             placeholder={
               focus === "cybersecurity"
                 ? "Filter AppSec, SOC, cloud security…"
-                : "Filter title, location, team…"
+                : "Filter title, description, location…"
             }
             className="sm:flex-1"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void load(false);
-            }}
           />
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => void load(false)} disabled={loading}>
-              Search
-            </Button>
             <Button
               variant="outline"
               onClick={() => void load(true)}
-              disabled={loading}
+              disabled={busy}
               aria-label="Refresh job feeds"
             >
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
               Refresh
             </Button>
           </div>
@@ -219,7 +280,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
               className="rounded-2xl border border-slate-200 bg-white/80 p-4 transition hover:border-[var(--brand)]/40"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-2">
+                <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="brand">{job.company}</Badge>
                     <Badge>{SOURCE_LABEL[job.source]}</Badge>
@@ -227,6 +288,9 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
                   </div>
                   <h2 className="font-serif-display text-lg text-slate-900">{job.title}</h2>
                   <p className="text-sm text-slate-600">{job.location}</p>
+                  {job.summary ? (
+                    <p className="max-w-3xl text-sm leading-relaxed text-slate-600">{job.summary}</p>
+                  ) : null}
                   {job.salaryLabel ? (
                     <p className="text-sm font-medium text-slate-900">
                       <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--brand)]">

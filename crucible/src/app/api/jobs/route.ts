@@ -4,6 +4,8 @@ import { jsonOk, withHandler } from "@/server/auth/api";
 import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
 import { matchesJobFocus, type JobFocus } from "@/server/jobs/decode";
 
+export const maxDuration = 60;
+
 const Query = z.object({
   company: z.string().optional(),
   q: z.string().optional(),
@@ -39,6 +41,7 @@ export async function GET(req: Request) {
           j.location.toLowerCase().includes(needle) ||
           (j.team?.toLowerCase().includes(needle) ?? false) ||
           j.company.toLowerCase().includes(needle) ||
+          (j.summary?.toLowerCase().includes(needle) ?? false) ||
           (j.salaryLabel?.toLowerCase().includes(needle) ?? false),
       );
     }
