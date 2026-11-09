@@ -7,6 +7,7 @@ import {
   fetchLinkedInCompany,
   fetchNetflix,
   fetchShopify,
+  mergeJobLists,
 } from "./adapters";
 import type { JobBoardResult, JobCompany, JobPosting, JobSource } from "./types";
 
@@ -68,14 +69,69 @@ const CAREERS_SEARCH: Record<JobCompany, { url: string; source: JobSource }> = {
   },
 };
 
-function browseFallback(company: JobCompany): JobPosting {
-  const dest = CAREERS_SEARCH[company];
+/** Cybersecurity browse links when a live feed is empty or blocked. */
+const CAREERS_SEARCH_CYBER: Record<JobCompany, { url: string; source: JobSource }> = {
+  Google: {
+    url: "https://www.google.com/about/careers/applications/jobs/results/?q=Security%20Engineer",
+    source: "google",
+  },
+  Meta: {
+    url: "https://www.metacareers.com/jobs/?q=security%20engineer",
+    source: "linkedin",
+  },
+  Amazon: {
+    url: "https://www.amazon.jobs/en/search?base_query=security%20engineer",
+    source: "amazon",
+  },
+  Apple: {
+    url: "https://jobs.apple.com/en-us/search?search=security%20engineer&sort=relevance",
+    source: "apple",
+  },
+  Microsoft: {
+    url: "https://jobs.careers.microsoft.com/global/en/search?q=cybersecurity",
+    source: "linkedin",
+  },
+  Stripe: {
+    url: "https://stripe.com/jobs/search?q=security",
+    source: "greenhouse",
+  },
+  Netflix: {
+    url: "https://explore.jobs.netflix.net/careers?query=security%20engineer",
+    source: "netflix",
+  },
+  Uber: {
+    url: "https://www.uber.com/us/en/careers/list/?query=security%20engineer",
+    source: "linkedin",
+  },
+  Cloudflare: {
+    url: "https://www.cloudflare.com/careers/jobs/?department=Engineering",
+    source: "greenhouse",
+  },
+  Bloomberg: {
+    url: "https://careers.bloomberg.com/job/search?q=security%20engineer",
+    source: "linkedin",
+  },
+  LinkedIn: {
+    url: "https://www.linkedin.com/jobs/search/?keywords=cybersecurity%20LinkedIn",
+    source: "linkedin",
+  },
+  Shopify: {
+    url: "https://www.shopify.com/careers/search?q=security",
+    source: "shopify",
+  },
+};
+
+function browseFallback(company: JobCompany, focus: "engineering" | "cybersecurity" = "engineering"): JobPosting {
+  const dest = focus === "cybersecurity" ? CAREERS_SEARCH_CYBER[company] : CAREERS_SEARCH[company];
   return {
-    id: `browse-${company}`,
+    id: `browse-${focus}-${company}`,
     company,
-    title: `Browse ${company} engineering roles`,
+    title:
+      focus === "cybersecurity"
+        ? `Browse ${company} cybersecurity roles`
+        : `Browse ${company} engineering roles`,
     location: "Official careers site",
-    team: "Open search",
+    team: focus === "cybersecurity" ? "Security search" : "Open search",
     url: dest.url,
     source: dest.source,
   };
@@ -87,52 +143,119 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
     let jobs: JobPosting[] = [];
     switch (company) {
       case "Google":
-        jobs = await fetchGoogle();
+        jobs = mergeJobLists(
+          await fetchGoogle("Software Engineer"),
+          await fetchGoogle("Security Engineer"),
+          await fetchGoogle("Cybersecurity"),
+        );
         break;
       case "Amazon":
-        jobs = await fetchAmazon();
+        jobs = mergeJobLists(
+          await fetchAmazon("software engineer"),
+          await fetchAmazon("security engineer"),
+          await fetchAmazon("cybersecurity"),
+        );
         break;
       case "Meta":
-        jobs = await fetchLinkedInCompany("Meta", {
-          companyId: 10667,
-          keywords: "software engineer",
-        });
+        jobs = mergeJobLists(
+          await fetchLinkedInCompany("Meta", {
+            companyId: 10667,
+            keywords: "software engineer",
+          }),
+          await fetchLinkedInCompany("Meta", {
+            companyId: 10667,
+            keywords: "security engineer",
+          }),
+          await fetchLinkedInCompany("Meta", {
+            companyId: 10667,
+            keywords: "cybersecurity",
+          }),
+        );
         break;
       case "Apple":
-        jobs = await fetchApple();
+        jobs = mergeJobLists(
+          await fetchApple("software engineer"),
+          await fetchApple("security engineer"),
+          await fetchApple("cybersecurity"),
+        );
         break;
       case "Microsoft":
-        jobs = await fetchLinkedInCompany("Microsoft", {
-          companyId: 1035,
-          keywords: "software engineer",
-        });
+        jobs = mergeJobLists(
+          await fetchLinkedInCompany("Microsoft", {
+            companyId: 1035,
+            keywords: "software engineer",
+          }),
+          await fetchLinkedInCompany("Microsoft", {
+            companyId: 1035,
+            keywords: "security engineer",
+          }),
+          await fetchLinkedInCompany("Microsoft", {
+            companyId: 1035,
+            keywords: "cybersecurity",
+          }),
+        );
         break;
       case "Stripe":
+        // Greenhouse board already includes security titles once looksLikeEngRole expands.
         jobs = await fetchGreenhouse("Stripe", "stripe");
         break;
       case "Netflix":
-        jobs = await fetchNetflix();
+        jobs = mergeJobLists(
+          await fetchNetflix("software engineer"),
+          await fetchNetflix("security engineer"),
+          await fetchNetflix("cybersecurity"),
+        );
         break;
       case "Uber":
-        jobs = await fetchLinkedInCompany("Uber", {
-          keywords: 'Uber "Software Engineer"',
-          requireCompanyName: "Uber",
-        });
+        jobs = mergeJobLists(
+          await fetchLinkedInCompany("Uber", {
+            keywords: 'Uber "Software Engineer"',
+            requireCompanyName: "Uber",
+          }),
+          await fetchLinkedInCompany("Uber", {
+            keywords: 'Uber "Security Engineer"',
+            requireCompanyName: "Uber",
+          }),
+          await fetchLinkedInCompany("Uber", {
+            keywords: "Uber cybersecurity",
+            requireCompanyName: "Uber",
+          }),
+        );
         break;
       case "Cloudflare":
         jobs = await fetchGreenhouse("Cloudflare", "cloudflare");
         break;
       case "Bloomberg":
-        jobs = await fetchLinkedInCompany("Bloomberg", {
-          keywords: 'Bloomberg "Software Engineer"',
-          requireCompanyName: "Bloomberg",
-        });
+        jobs = mergeJobLists(
+          await fetchLinkedInCompany("Bloomberg", {
+            keywords: 'Bloomberg "Software Engineer"',
+            requireCompanyName: "Bloomberg",
+          }),
+          await fetchLinkedInCompany("Bloomberg", {
+            keywords: 'Bloomberg "Security Engineer"',
+            requireCompanyName: "Bloomberg",
+          }),
+          await fetchLinkedInCompany("Bloomberg", {
+            keywords: "Bloomberg cybersecurity",
+            requireCompanyName: "Bloomberg",
+          }),
+        );
         break;
       case "LinkedIn":
-        jobs = await fetchLinkedInCompany("LinkedIn", {
-          companyId: 1337,
-          keywords: "software engineer",
-        });
+        jobs = mergeJobLists(
+          await fetchLinkedInCompany("LinkedIn", {
+            companyId: 1337,
+            keywords: "software engineer",
+          }),
+          await fetchLinkedInCompany("LinkedIn", {
+            companyId: 1337,
+            keywords: "security engineer",
+          }),
+          await fetchLinkedInCompany("LinkedIn", {
+            companyId: 1337,
+            keywords: "cybersecurity",
+          }),
+        );
         break;
       case "Shopify":
         jobs = await fetchShopify();
@@ -140,13 +263,15 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
       default:
         jobs = [];
     }
-    if (!jobs.length) jobs = [browseFallback(company)];
+    if (!jobs.length) {
+      jobs = [browseFallback(company, "engineering"), browseFallback(company, "cybersecurity")];
+    }
     return { company, ok: true, jobs, fetchedAt };
   } catch (e) {
     return {
       company,
       ok: false,
-      jobs: [browseFallback(company)],
+      jobs: [browseFallback(company, "engineering"), browseFallback(company, "cybersecurity")],
       error: e instanceof Error ? e.message.slice(0, 160) : "Fetch failed",
       fetchedAt,
     };

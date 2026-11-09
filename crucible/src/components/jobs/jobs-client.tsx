@@ -23,8 +23,17 @@ const SOURCE_LABEL: Record<JobSource, string> = {
   linkedin: "LinkedIn listing",
 };
 
+type JobFocus = "all" | "engineering" | "cybersecurity";
+
+const FOCUS_OPTIONS: { id: JobFocus; label: string }[] = [
+  { id: "all", label: "All tech" },
+  { id: "engineering", label: "Engineering" },
+  { id: "cybersecurity", label: "Cybersecurity" },
+];
+
 export function JobsClient(props: { companies: readonly JobCompany[] }) {
   const [company, setCompany] = useState<string>("All");
+  const [focus, setFocus] = useState<JobFocus>("all");
   const [q, setQ] = useState("");
   const [jobs, setJobs] = useState<JobPosting[]>([]);
   const [byCompany, setByCompany] = useState<Record<string, BoardMeta>>({});
@@ -38,6 +47,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
     try {
       const params = new URLSearchParams();
       if (company !== "All") params.set("company", company);
+      if (focus !== "all") params.set("focus", focus);
       if (q.trim()) params.set("q", q.trim());
       if (refresh) params.set("refresh", "1");
       const res = await fetch(`/api/jobs?${params.toString()}`);
@@ -53,7 +63,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
     } finally {
       setLoading(false);
     }
-  }, [company, q]);
+  }, [company, focus, q]);
 
   useEffect(() => {
     void load(false);
@@ -75,8 +85,8 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
           Official openings from company career boards
         </h1>
         <p className="mt-2 max-w-2xl text-slate-600">
-          Aggregated public postings (Greenhouse and company career sites) — not Crucible-hosted applications.
-          Apply on the employer&apos;s page; prep here with a matching mock.
+          Aggregated public postings for software engineering and cybersecurity (Greenhouse and company career
+          sites) — not Crucible-hosted applications. Apply on the employer&apos;s page; prep here with a matching mock.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <Briefcase className="h-3.5 w-3.5" />
@@ -90,6 +100,25 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
       </header>
 
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4 sm:p-5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Focus</p>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+          {FOCUS_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setFocus(opt.id)}
+              className={cn(
+                "shrink-0 rounded-md border px-3 py-2 text-xs transition",
+                focus === opt.id
+                  ? "border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900"
+                  : "border-slate-200 text-slate-600 hover:bg-slate-50",
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Company</p>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
           <button
@@ -128,7 +157,11 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter title, location, team…"
+            placeholder={
+              focus === "cybersecurity"
+                ? "Filter AppSec, SOC, cloud security…"
+                : "Filter title, location, team…"
+            }
             className="sm:flex-1"
             onKeyDown={(e) => {
               if (e.key === "Enter") void load(false);

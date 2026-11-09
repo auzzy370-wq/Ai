@@ -2,10 +2,12 @@ import { z } from "zod";
 import { COMPANIES } from "@/lib/saas";
 import { jsonOk, withHandler } from "@/server/auth/api";
 import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
+import { matchesJobFocus, type JobFocus } from "@/server/jobs/decode";
 
 const Query = z.object({
   company: z.string().optional(),
   q: z.string().optional(),
+  focus: z.enum(["all", "engineering", "cybersecurity"]).optional(),
   refresh: z.enum(["1", "true"]).optional(),
 });
 
@@ -15,14 +17,19 @@ export async function GET(req: Request) {
     const parsed = Query.parse({
       company: url.searchParams.get("company") || undefined,
       q: url.searchParams.get("q") || undefined,
+      focus: url.searchParams.get("focus") || undefined,
       refresh: url.searchParams.get("refresh") || undefined,
     });
 
     const board = await getJobBoard({ force: Boolean(parsed.refresh) });
     let jobs = flattenJobs(board.results);
+    const focus = (parsed.focus ?? "all") as JobFocus;
 
     if (parsed.company && parsed.company !== "All") {
       jobs = jobs.filter((j) => j.company === parsed.company);
+    }
+    if (focus !== "all") {
+      jobs = jobs.filter((j) => matchesJobFocus(j.title, focus));
     }
     if (parsed.q?.trim()) {
       const needle = parsed.q.trim().toLowerCase();
@@ -38,7 +45,11 @@ export async function GET(req: Request) {
     const byCompany = Object.fromEntries(
       board.results.map((r) => [
         r.company,
-        { ok: r.ok, count: r.jobs.length, error: r.error ?? null },
+        {
+          ok: r.ok,
+          count: r.jobs.filter((j) => (focus === "all" ? true : matchesJobFocus(j.title, focus))).length,
+          error: r.error ?? null,
+        },
       ]),
     );
 
@@ -47,6 +58,7 @@ export async function GET(req: Request) {
       total: jobs.length,
       companies: [...COMPANIES],
       byCompany,
+      focus,
       refreshedAt: board.refreshedAt,
       cached: board.cached,
     });

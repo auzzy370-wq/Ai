@@ -1,6 +1,20 @@
 import type { JobCompany, JobPosting, JobSource } from "./types";
 import { decodeHtml, looksLikeEngRole, titleFromSlug } from "./decode";
 
+/** Merge board pages / keyword searches and keep first occurrence per id. */
+export function mergeJobLists(...lists: JobPosting[][]): JobPosting[] {
+  const seen = new Set<string>();
+  const out: JobPosting[] = [];
+  for (const list of lists) {
+    for (const job of list) {
+      if (seen.has(job.id)) continue;
+      seen.add(job.id);
+      out.push(job);
+    }
+  }
+  return out;
+}
+
 const UA =
   "Mozilla/5.0 (compatible; CrucibleJobs/1.0; +https://crucible.dev; research; respectful)";
 
@@ -125,7 +139,12 @@ export async function fetchApple(query = "software engineer"): Promise<JobPostin
     if (seen.has(id)) continue;
     seen.add(id);
     const title = titleFromSlug(slug);
-    if (!looksLikeEngRole(title) && !/engineer|developer|software|siri|ml|ai/i.test(slug)) continue;
+    if (
+      !looksLikeEngRole(title) &&
+      !/engineer|developer|software|siri|ml|ai|security|cyber|infosec|appsec/i.test(slug)
+    ) {
+      continue;
+    }
     jobs.push(
       post("Apple", "apple", {
         id: `apple-${id}`,
