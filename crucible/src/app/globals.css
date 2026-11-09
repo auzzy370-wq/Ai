@@ -3,10 +3,11 @@
 @tailwind utilities;
 
 /*
-  Crucible brand tokens.
+  Crucible brand tokens (purple).
   Slate/orange/amber scales invert semantically in .dark so existing
   light-oriented utilities (text-slate-900, border-slate-200, bg-orange-50…)
-  stay readable without rewriting every page.
+  stay readable without rewriting every page. The --orange-* scale is remapped
+  to the purple brand so legacy orange-* Tailwind classes follow the brand.
 */
 
 :root {
@@ -16,19 +17,19 @@
   --line: #ddd4cb;
   --text: #12141a;
   --muted: #6b6570;
-  --accent: #ff5a1f;
-  --accent-2: #ff7a3d;
+  --accent: #7c3aed;
+  --accent-2: #8b5cf6;
   --danger: #e11d48;
   --warning: #d97706;
   --background: #f7f4f1;
   --foreground: #12141a;
   --surface: #ffffff;
   --surface-elevated: #ffffff;
-  --brand: #ff5a1f;
-  --brand-hover: #ff7038;
-  --brand-soft: rgba(255, 90, 31, 0.12);
+  --brand: #7c3aed;
+  --brand-hover: #6d28d9;
+  --brand-soft: rgba(124, 58, 237, 0.12);
   --brand-ink: #12141a;
-  --brand-flame: #ff5a1f;
+  --brand-flame: #8b5cf6;
   /* Inline/fenced code chips — never use remapped slate/orange scales here */
   --code-chip-bg: #ece8e4;
   --code-chip-fg: #1a1512;
@@ -76,17 +77,18 @@
   --emerald-900: #064e3b;
   --emerald-950: #022c22;
 
-  --orange-50: #fff4ef;
-  --orange-100: #ffe4d6;
-  --orange-200: #ffc4a8;
-  --orange-300: #ff9a66;
-  --orange-400: #ff7340;
-  --orange-500: #ff5a1f;
-  --orange-600: #e84a12;
-  --orange-700: #c43b0d;
-  --orange-800: #9a2f0f;
-  --orange-900: #7a2812;
-  --orange-950: #3f1208;
+  /* Legacy orange-* utilities → purple brand scale */
+  --orange-50: #f5f3ff;
+  --orange-100: #ede9fe;
+  --orange-200: #ddd6fe;
+  --orange-300: #c4b5fd;
+  --orange-400: #a78bfa;
+  --orange-500: #8b5cf6;
+  --orange-600: #7c3aed;
+  --orange-700: #6d28d9;
+  --orange-800: #5b21b6;
+  --orange-900: #4c1d95;
+  --orange-950: #2e1065;
 
   --rose-50: #fff1f2;
   --rose-100: #ffe4e6;
@@ -120,19 +122,19 @@
   --line: #243246;
   --text: #e8eef5;
   --muted: #8b9cb3;
-  --accent: #ff7340;
-  --accent-2: #ff9a66;
+  --accent: #a78bfa;
+  --accent-2: #c4b5fd;
   --background: #07090d;
   --foreground: #e8eef5;
   --surface: #0c1016;
   --surface-elevated: #121820;
-  --brand: #ff5a1f;
-  --brand-hover: #ff7340;
-  --brand-soft: rgba(255, 90, 31, 0.16);
+  --brand: #8b5cf6;
+  --brand-hover: #a78bfa;
+  --brand-soft: rgba(139, 92, 246, 0.18);
   --brand-ink: #f4f1ec;
-  --brand-flame: #ff5a1f;
+  --brand-flame: #a78bfa;
   --code-chip-bg: #1a2029;
-  --code-chip-fg: #ffc4a0;
+  --code-chip-fg: #ddd6fe;
   --code-chip-border: #2a3340;
   --code-block-bg: #0c1016;
   --code-block-fg: #f3eee8;
@@ -176,17 +178,17 @@
   --emerald-900: #ecfdf5;
   --emerald-950: #f0fdf8;
 
-  --orange-50: rgba(255, 90, 31, 0.08);
-  --orange-100: rgba(255, 90, 31, 0.14);
-  --orange-200: rgba(255, 90, 31, 0.28);
-  --orange-300: #ff9a66;
-  --orange-400: #ff7340;
-  --orange-500: #ff5a1f;
-  --orange-600: #ff7340;
-  --orange-700: #ff9a66;
-  --orange-800: #ffc4a8;
-  --orange-900: #ffe4d6;
-  --orange-950: #fff4ef;
+  --orange-50: rgba(139, 92, 246, 0.08);
+  --orange-100: rgba(139, 92, 246, 0.14);
+  --orange-200: rgba(139, 92, 246, 0.28);
+  --orange-300: #c4b5fd;
+  --orange-400: #a78bfa;
+  --orange-500: #8b5cf6;
+  --orange-600: #a78bfa;
+  --orange-700: #c4b5fd;
+  --orange-800: #ddd6fe;
+  --orange-900: #ede9fe;
+  --orange-950: #f5f3ff;
 
   --rose-50: #1a1216;
   --rose-100: #22161c;

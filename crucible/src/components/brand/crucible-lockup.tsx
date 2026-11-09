@@ -25,7 +25,7 @@ export function CrucibleGlyph({ className }: { className?: string }) {
   );
 }
 
-/** Wordmark matches the logo: geometric sans + orange tittle on the i. */
+/** Wordmark matches the logo: geometric sans + purple tittle on the i. */
 export function CrucibleWordmark({ className }: { className?: string }) {
   return (
     <span
@@ -35,7 +35,7 @@ export function CrucibleWordmark({ className }: { className?: string }) {
       Cruc
       <span className="relative inline-block" aria-hidden>
         ı
-        <span className="pointer-events-none absolute left-1/2 top-[0.06em] h-[0.2em] w-[0.2em] -translate-x-1/2 rounded-full bg-[var(--brand-flame,#ff5a1f)]" />
+        <span className="pointer-events-none absolute left-1/2 top-[0.06em] h-[0.2em] w-[0.2em] -translate-x-1/2 rounded-full bg-[var(--brand-flame,#8b5cf6)]" />
       </span>
       ble
     </span>
