@@ -47,3 +47,6 @@ Apply `crucible-purple-brand.patch`: orange → purple across tokens + logo.
 
 ## Jobs cybersecurity (2026-11-09)
 Apply `crucible-jobs-cybersecurity.patch`: cyber focus chip + security keyword fetches.
+
+## Revert purple → orange (2026-11-09)
+Apply `crucible-revert-purple-to-orange.patch` after the purple brand patch (or skip purple).
