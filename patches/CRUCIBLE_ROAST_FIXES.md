@@ -50,3 +50,6 @@ Apply `crucible-jobs-cybersecurity.patch`: cyber focus chip + security keyword f
 
 ## Revert purple → orange (2026-11-09)
 Apply `crucible-revert-purple-to-orange.patch` after the purple brand patch (or skip purple).
+
+## Jobs yearly pay (2026-11-09)
+Apply `crucible-jobs-yearly-pay.patch`: parse and show yearly salary ranges when listed.
