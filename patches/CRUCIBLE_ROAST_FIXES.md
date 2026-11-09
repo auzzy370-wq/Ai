@@ -56,3 +56,6 @@ Apply `crucible-jobs-yearly-pay.patch`: parse and show yearly salary ranges when
 
 ## Jobs descriptions + speed (2026-11-09)
 Apply `crucible-jobs-desc-speed.patch`: short blurbs, SSR warm, parallel fetches, client filters.
+
+## Jobs remote (2026-11-09)
+Apply `crucible-jobs-remote.patch`: remote detect/badge, Remote focus chip, remote keyword + LinkedIn `f_WT=2` fetches.
