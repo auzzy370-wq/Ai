@@ -90,3 +90,6 @@ Apply `crucible-flashcard-filters.patch`: hub filters for difficulty/domain/patt
 
 ## Career paths (2026-11-10)
 Apply `crucible-career-paths.patch`: choose a job target; enroll courses/practicums in order; `/career` syllabus that teaches what that role needs.
+
+## Flash card answering (2026-11-10)
+Apply `crucible-flashcard-answer.patch`: type answers or multiple choice on-site, check vs model answer, grade got-it/close/missed.
