@@ -59,3 +59,7 @@ Apply `crucible-jobs-desc-speed.patch`: short blurbs, SSR warm, parallel fetches
 
 ## Jobs remote (2026-11-09)
 Apply `crucible-jobs-remote.patch`: remote detect/badge, Remote focus chip, remote keyword + LinkedIn `f_WT=2` fetches.
+
+## Security hardening (2026-11-10)
+Apply `crucible-security-hardening.patch`: CSRF middleware, env guards, Jobs rate limits, password session revoke, lesson XSS fix, `/security` page + Settings security checklist.
+
