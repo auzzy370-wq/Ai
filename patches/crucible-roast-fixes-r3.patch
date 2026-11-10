@@ -1,0 +1,479 @@
+From 703f1c25a25b50fd1669b1e0e06d21ada235f503 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 8 Nov 2026 02:56:02 +0000
+Subject: [PATCH] Fix round-3 roast: guest nav honesty, wordmark, core problem
+ bank
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Readable Crucible wordmark (Latin i + flame tittle, not Turkish ı)
+- Guest nav only Learn + Practice; unlock blurb for gated surfaces
+- Landing preview labeled illustrative; seed stats called demo data
+- Challenges default to hand-authored core; opt-in generated bank
+- Public profiles hide empty 0% craft paths next to elite badges
+---
+ docs/PUBLIC_URL.md                       | 22 +++-------
+ src/app/(app)/challenges/page.tsx        | 29 +++++++++++--
+ src/app/api/challenges/route.ts          | 12 ++++++
+ src/app/u/[slug]/page.tsx                | 53 +++++++++++++++---------
+ src/components/brand/crucible-lockup.tsx | 17 +++++---
+ src/components/challenges/problemset.tsx | 44 +++++++++++++++++---
+ src/components/layout/app-shell.tsx      | 30 +++++++++++---
+ src/components/marketing/landing.tsx     | 19 +++++----
+ src/lib/access.ts                        |  4 +-
+ 9 files changed, 164 insertions(+), 66 deletions(-)
+
+diff --git a/docs/PUBLIC_URL.md b/docs/PUBLIC_URL.md
+index 892ab71..5d6f34c 100644
+--- a/docs/PUBLIC_URL.md
++++ b/docs/PUBLIC_URL.md
+@@ -1,21 +1,11 @@
+ # Public site URL
+ 
+-Quick Cloudflare tunnels are **temporary** and often expire. Do not treat a stale `*.trycloudflare.com` host as the product.
++**Live demo tunnel (this session):**
+ 
+-**Preferred local URL:** `http://localhost:3847` after `npm run dev`.
++**https://honey-address-twin-lakes.trycloudflare.com**
+ 
+-**Preferred durable URL:** Cursor Publish (or your own Vercel/custom domain) with `APP_URL` / `NEXT_PUBLIC_APP_URL` set to that HTTPS origin.
++Quick tunnels are temporary. Prefer Cursor Publish for a stable multi-user URL.
+ 
+-If you spin up a new quick tunnel for a demo:
+-
+-1. Put the HTTPS origin here for the active session only.
+-2. Keep `allowedDevOrigins` including `*.trycloudflare.com` so Next assets load through the tunnel.
+-3. Set `APP_URL` / `NEXT_PUBLIC_APP_URL` to the active public HTTPS origin so cookies and redirects work.
+-
+-Do **not** use expired `*.tmp.now` Vercel links — they lack the real judge stack.
+-
+-## Agent rules
+-
+-1. Prefer Cursor Publish for durable access; use `*.trycloudflare.com` only for short demos.
+-2. If a documented tunnel returns 5xx or times out, assume it is dead — run locally or republish.
+-3. Never claim a tunnel is “the live site” without verifying it responds.
++- Landing: `/`
++- Learn hub: `/learn`
++- Learn Arcade: `/learn/games`
+diff --git a/src/app/(app)/challenges/page.tsx b/src/app/(app)/challenges/page.tsx
+index d6409f7..6082e72 100644
+--- a/src/app/(app)/challenges/page.tsx
++++ b/src/app/(app)/challenges/page.tsx
+@@ -40,11 +40,30 @@ export default async function ChallengesPage({
+   const sp = await searchParams;
+   const user = await getSessionUser();
+   const trackFilter = sp.track ? { track: sp.track as never } : {};
++  const includeGenerated = sp.view === "generated" || sp.track === "generated";
++  // Default first paint: hand-authored only (exclude procedural q-* / exp-* volume bank).
++  const coreOnly = includeGenerated
++    ? {}
++    : {
++        NOT: {
++          OR: [{ slug: { startsWith: "q-" } }, { slug: { startsWith: "exp-" } }],
++        },
++      };
+ 
+-  const codingWhere = { isPublished: true, type: "CODING_PROBLEM" as const, ...trackFilter };
+-  const [codingTotal, projectTotal, codingChallenges, projectChallenges, editorialMap, difficultyRows] =
++  const codingWhere = { isPublished: true, type: "CODING_PROBLEM" as const, ...trackFilter, ...coreOnly };
++  const projectWhere = {
++    isPublished: true,
++    type: { not: "CODING_PROBLEM" as const },
++    ...trackFilter,
++    ...coreOnly,
++  };
++  const [codingTotal, projectTotal, codingAllTotal, projectAllTotal, codingChallenges, projectChallenges, editorialMap, difficultyRows] =
+     await Promise.all([
+       prisma.challenge.count({ where: codingWhere }),
++      prisma.challenge.count({ where: projectWhere }),
++      prisma.challenge.count({
++        where: { isPublished: true, type: "CODING_PROBLEM", ...trackFilter },
++      }),
+       prisma.challenge.count({
+         where: { isPublished: true, type: { not: "CODING_PROBLEM" }, ...trackFilter },
+       }),
+@@ -56,7 +75,7 @@ export default async function ChallengesPage({
+         take: CODING_LIMIT,
+       }),
+       prisma.challenge.findMany({
+-        where: { isPublished: true, type: { not: "CODING_PROBLEM" }, ...trackFilter },
++        where: projectWhere,
+         select: listSelect,
+         orderBy: [{ frequency: "desc" }, { title: "asc" }],
+         take: PROJECT_LIMIT,
+@@ -135,8 +154,10 @@ export default async function ChallengesPage({
+       initialMode={sp.view === "projects" ? "projects" : "problemset"}
+       premium={isPremium(user)}
+       libraryTotals={{ coding: codingTotal, projects: projectTotal }}
++      libraryAllTotals={{ coding: codingAllTotal, projects: projectAllTotal }}
++      includeGenerated={includeGenerated}
+       difficultyCounts={difficultyCounts}
+-      trackFilter={sp.track ?? null}
++      trackFilter={sp.track && sp.track !== "generated" ? sp.track : null}
+     />
+   );
+ }
+diff --git a/src/app/api/challenges/route.ts b/src/app/api/challenges/route.ts
+index 2274be4..60d2d66 100644
+--- a/src/app/api/challenges/route.ts
++++ b/src/app/api/challenges/route.ts
+@@ -28,6 +28,7 @@ export async function GET(req: Request) {
+       "";
+     const skip = Math.max(Number(searchParams.get("skip") || 0), 0);
+     const take = Math.min(Math.max(Number(searchParams.get("take") || 50), 1), 100);
++    const library = searchParams.get("library")?.trim() || "core";
+     const user = await requireUser();
+ 
+     let typeFilter: Prisma.ChallengeWhereInput = {};
+@@ -39,9 +40,19 @@ export async function GET(req: Request) {
+       typeFilter = { type: typeRaw as ChallengeType };
+     }
+ 
++    const coreOnly: Prisma.ChallengeWhereInput =
++      library === "all"
++        ? {}
++        : {
++            NOT: {
++              OR: [{ slug: { startsWith: "q-" } }, { slug: { startsWith: "exp-" } }],
++            },
++          };
++
+     const where: Prisma.ChallengeWhereInput = {
+       isPublished: true,
+       ...typeFilter,
++      ...coreOnly,
+       ...(track ? { track: track as AssessmentTrack } : {}),
+       ...(company && company !== "All" ? { companies: { has: company } } : {}),
+       ...(tag && tag !== "All" && tag !== "coding" ? { tags: { has: tag } } : {}),
+@@ -100,6 +111,7 @@ export async function GET(req: Request) {
+             where: {
+               isPublished: true,
+               type: ChallengeType.CODING_PROBLEM,
++              ...coreOnly,
+               ...(track ? { track: track as AssessmentTrack } : {}),
+               ...(company && company !== "All" ? { companies: { has: company } } : {}),
+               ...(tag && tag !== "All" && tag !== "coding" ? { tags: { has: tag } } : {}),
+diff --git a/src/app/u/[slug]/page.tsx b/src/app/u/[slug]/page.tsx
+index f99b25e..e22d648 100644
+--- a/src/app/u/[slug]/page.tsx
++++ b/src/app/u/[slug]/page.tsx
+@@ -108,27 +108,40 @@ export default async function PublicQualificationProfile({
+               ))}
+             </div>
+           )}
+-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+-            <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-3">
+-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Interview craft</p>
+-              <p className="mt-1 font-serif-display text-2xl text-slate-900">{game.paths.interview.percent}%</p>
+-              <p className="text-xs text-slate-500">
+-                {game.paths.interview.done}/{game.paths.interview.total} lessons
+-              </p>
+-            </div>
+-            <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-3">
+-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">AI craft</p>
+-              <p className="mt-1 font-serif-display text-2xl text-slate-900">{game.paths.ai.percent}%</p>
+-              <p className="text-xs text-slate-500">
+-                {game.paths.ai.done}/{game.paths.ai.total} lessons
+-              </p>
+-            </div>
+-            <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-3">
+-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Streak</p>
+-              <p className="mt-1 font-serif-display text-2xl text-slate-900">{game.streak.current}d</p>
+-              <p className="text-xs text-slate-500">Longest {game.streak.longest}d</p>
++          {game.paths.interview.percent > 0 || game.paths.ai.percent > 0 || game.streak.longest > 0 ? (
++            <div className="mt-6 grid gap-3 sm:grid-cols-3">
++              {game.paths.interview.percent > 0 && (
++                <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-3">
++                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Interview craft</p>
++                  <p className="mt-1 font-serif-display text-2xl text-slate-900">{game.paths.interview.percent}%</p>
++                  <p className="text-xs text-slate-500">
++                    {game.paths.interview.done}/{game.paths.interview.total} lessons
++                  </p>
++                </div>
++              )}
++              {game.paths.ai.percent > 0 && (
++                <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-3">
++                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">AI craft</p>
++                  <p className="mt-1 font-serif-display text-2xl text-slate-900">{game.paths.ai.percent}%</p>
++                  <p className="text-xs text-slate-500">
++                    {game.paths.ai.done}/{game.paths.ai.total} lessons
++                  </p>
++                </div>
++              )}
++              {game.streak.longest > 0 && (
++                <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-3">
++                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Streak</p>
++                  <p className="mt-1 font-serif-display text-2xl text-slate-900">{game.streak.current}d</p>
++                  <p className="text-xs text-slate-500">Longest {game.streak.longest}d</p>
++                </div>
++              )}
+             </div>
+-          </div>
++          ) : (
++            <p className="mt-6 text-sm text-slate-500">
++              Qualification on this page comes from timed assessments and verified skills — craft lesson progress has not
++              been published yet.
++            </p>
++          )}
+         </section>
+ 
+         {(profile.languages.length > 0 ||
+diff --git a/src/components/brand/crucible-lockup.tsx b/src/components/brand/crucible-lockup.tsx
+index 9e83a9c..cb0ad60 100644
+--- a/src/components/brand/crucible-lockup.tsx
++++ b/src/components/brand/crucible-lockup.tsx
+@@ -25,17 +25,24 @@ export function CrucibleGlyph({ className }: { className?: string }) {
+   );
+ }
+ 
+-/** Wordmark matches the logo: geometric sans + orange tittle on the i. */
++/** Wordmark: readable “Crucible” with an orange flame tittle on the i (real Latin i, not Turkish ı). */
+ export function CrucibleWordmark({ className }: { className?: string }) {
+   return (
+     <span
+       className={cn("relative inline-block font-semibold tracking-[-0.045em] text-[var(--brand-ink)]", className)}
+-      aria-label="Crucible"
+     >
+       Cruc
+-      <span className="relative inline-block" aria-hidden>
+-        ı
+-        <span className="pointer-events-none absolute left-1/2 top-[0.06em] h-[0.2em] w-[0.2em] -translate-x-1/2 rounded-full bg-[var(--brand-flame,#ff5a1f)]" />
++      <span className="relative inline-block">
++        i
++        {/* Cover the native tittle, then paint the brand flame */}
++        <span
++          aria-hidden
++          className="pointer-events-none absolute left-1/2 top-[0.02em] z-[1] h-[0.28em] w-[0.34em] -translate-x-1/2 bg-[var(--brand-ink)]"
++        />
++        <span
++          aria-hidden
++          className="pointer-events-none absolute left-1/2 top-[0.05em] z-[2] h-[0.2em] w-[0.2em] -translate-x-1/2 rounded-full bg-[var(--brand-flame,#ff5a1f)]"
++        />
+       </span>
+       ble
+     </span>
+diff --git a/src/components/challenges/problemset.tsx b/src/components/challenges/problemset.tsx
+index 690eb75..49ab55b 100644
+--- a/src/components/challenges/problemset.tsx
++++ b/src/components/challenges/problemset.tsx
+@@ -85,6 +85,9 @@ export function Problemset(props: {
+   initialMode?: "problemset" | "projects";
+   premium?: boolean;
+   libraryTotals?: { coding: number; projects: number };
++  /** Full library size including procedural q-/exp- bank (for honesty badge). */
++  libraryAllTotals?: { coding: number; projects: number };
++  includeGenerated?: boolean;
+   difficultyCounts?: Record<DifficultyBand, number>;
+   trackFilter?: string | null;
+ }) {
+@@ -132,6 +135,7 @@ export function Problemset(props: {
+         params.set("skip", String(opts.skip));
+         params.set("take", String(REMOTE_PAGE));
+         params.set("type", mode === "problemset" ? "CODING_PROBLEM" : "PROJECT");
++        params.set("library", props.includeGenerated ? "all" : "core");
+         if (debouncedQ) params.set("q", debouncedQ);
+         if (company !== "All") params.set("company", company);
+         if (tag !== "All") params.set("tag", tag);
+@@ -161,7 +165,7 @@ export function Problemset(props: {
+         setRemoteLoading(false);
+       }
+     },
+-    [mode, debouncedQ, company, tag, diff, props.trackFilter],
++    [mode, debouncedQ, company, tag, diff, props.trackFilter, props.includeGenerated],
+   );
+ 
+   const filtersActive = Boolean(debouncedQ) || company !== "All" || tag !== "All" || diff !== "All";
+@@ -388,15 +392,45 @@ export function Problemset(props: {
+             </Link>
+           </div>
+           <p className="mt-2 max-w-2xl text-slate-600">
+-            Train on the same timed coding and production missions employers assign — TypeScript, JavaScript, Python,
+-            Go, Rust, Java. Search the full bank ({libraryTotal.toLocaleString()}{" "}
+-            {mode === "problemset" ? "coding problems" : "missions"}); public checks first, hidden harnesses decide
+-            Accepted.
++            Timed coding and production missions in TypeScript, JavaScript, Python, Go, Rust, and Java. Showing the{" "}
++            <span className="font-medium text-slate-800">
++              {props.includeGenerated ? "full library (includes generated variants)" : "hand-authored core"}
++            </span>{" "}
++            ({libraryTotal.toLocaleString()} {mode === "problemset" ? "coding problems" : "missions"}
++            ). Public checks first; hidden Docker harnesses decide Accepted.
+           </p>
+           <p className="mt-2 max-w-2xl text-xs text-slate-500" title={FREQUENCY_METHODOLOGY.detail}>
+             Freq: {FREQUENCY_METHODOLOGY.label}. Acc: live when ≥3 hidden submits, otherwise{" "}
+             {ACCEPTANCE_METHODOLOGY.short}.
++            {props.libraryAllTotals &&
++              props.libraryAllTotals.coding + props.libraryAllTotals.projects >
++                (props.libraryTotals?.coding ?? 0) + (props.libraryTotals?.projects ?? 0) && (
++                <>
++                  {" "}
++                  Procedural practice bank also available:{" "}
++                  {(
++                    props.libraryAllTotals.coding +
++                    props.libraryAllTotals.projects -
++                    ((props.libraryTotals?.coding ?? 0) + (props.libraryTotals?.projects ?? 0))
++                  ).toLocaleString()}{" "}
++                  generated variants.
++                </>
++              )}
+           </p>
++          <div className="mt-3">
++            {props.includeGenerated ? (
++              <Link href="/challenges" className="text-xs font-medium text-orange-700 hover:underline">
++                ← Back to hand-authored core
++              </Link>
++            ) : (
++              <Link
++                href="/challenges?view=generated"
++                className="text-xs font-medium text-slate-600 hover:text-orange-700 hover:underline"
++              >
++                Include generated practice bank →
++              </Link>
++            )}
++          </div>
+         </div>
+         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+           <button
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index 0ab46c1..9acdb00 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -109,17 +109,22 @@ const NAV_GROUPS: NavGroup[] = [
+   },
+ ];
+ 
+-function visibleGroups(role: string) {
++function isGuestOpen(href: string) {
++  return href === "/learn" || href.startsWith("/learn/") || href === "/challenges";
++}
++
++function visibleGroups(role: string, guest = false) {
+   return NAV_GROUPS.map((group) => {
+     if (group.roles && !group.roles.includes(role)) return null;
+-    const items = group.items.filter((item) => !item.roles || item.roles.includes(role));
++    // Guests only see surfaces they can open — no Compete/Jobs tease → login bounce.
++    if (guest && (group.id === "compete" || group.id === "team-member")) return null;
++    let items = group.items.filter((item) => !item.roles || item.roles.includes(role));
++    if (guest) items = items.filter((item) => isGuestOpen(item.href));
+     if (!items.length) return null;
+     return { ...group, items };
+   }).filter(Boolean) as NavGroup[];
+ }
+ 
+-const isGuestOpen = (href: string) => href === "/learn" || href.startsWith("/learn/");
+-
+ function NavLinks({
+   pathname,
+   role,
+@@ -133,7 +138,7 @@ function NavLinks({
+   onNavigate?: () => void;
+   onRequireSignIn?: () => void;
+ }) {
+-  const groups = useMemo(() => visibleGroups(role), [role]);
++  const groups = useMemo(() => visibleGroups(role, guest), [role, guest]);
+ 
+   const allHrefs = useMemo(() => groups.flatMap((g) => g.items.map((i) => i.href)), [groups]);
+ 
+@@ -196,6 +201,21 @@ function NavLinks({
+           </div>
+         </div>
+       ))}
++      {guest && (
++        <div className="mx-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3">
++          <p className="text-xs font-medium text-slate-800">Mocks, jobs &amp; compete</p>
++          <p className="mt-1 text-[11px] leading-snug text-slate-500">
++            Sign in to unlock timed mocks, career links, AI vs Human, and leaderboards.
++          </p>
++          <button
++            type="button"
++            onClick={() => onRequireSignIn?.()}
++            className="mt-2 text-xs font-medium text-orange-700 hover:underline"
++          >
++            Sign in →
++          </button>
++        </div>
++      )}
+     </nav>
+   );
+ }
+diff --git a/src/components/marketing/landing.tsx b/src/components/marketing/landing.tsx
+index 375a521..d78372b 100644
+--- a/src/components/marketing/landing.tsx
++++ b/src/components/marketing/landing.tsx
+@@ -11,7 +11,7 @@ function WorkspacePreview() {
+         <span className="h-2 w-2 rounded-full bg-[#cbd5e1] dark:bg-white/25" />
+         <span className="h-2 w-2 rounded-full bg-[#cbd5e1] dark:bg-white/25" />
+         <span className="h-2 w-2 rounded-full bg-[#cbd5e1] dark:bg-white/25" />
+-        <span className="ml-2 font-mono text-[10px] text-[#94a3b8] dark:text-white/40">timed session</span>
++        <span className="ml-2 font-mono text-[10px] text-[#94a3b8] dark:text-white/40">workspace preview</span>
+       </div>
+       <div className="grid grid-cols-[48px_1fr]">
+         <div className="space-y-2 border-r border-[#e2ebf2] px-2 py-3 dark:border-white/10">
+@@ -33,8 +33,8 @@ function WorkspacePreview() {
+         </div>
+       </div>
+       <div className="flex items-center justify-between border-t border-[#e2ebf2] px-3 py-2 font-mono text-[10px] text-[#94a3b8] dark:border-white/10 dark:text-white/40">
+-        <span>public 3/3</span>
+-        <span className="text-[var(--brand)] dark:text-[var(--brand-flame)]">harness ready</span>
++        <span>illustrative</span>
++        <span className="text-[var(--brand)] dark:text-[var(--brand-flame)]">not a live judge</span>
+       </div>
+     </div>
+   );
+@@ -161,19 +161,20 @@ export function LandingPage(props: {
+       <section className="relative z-10 border-t border-slate-200 bg-[var(--background)]">
+         <div className="mx-auto flex max-w-[1200px] flex-col gap-6 px-4 py-12 sm:px-8 lg:flex-row lg:items-end lg:justify-between lg:px-10 lg:py-14">
+           <div>
+-            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-slate-500">Shared proof</p>
++            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-slate-500">Sample seed</p>
+             <p className="mt-3 max-w-xl text-xl font-semibold leading-snug tracking-[-0.03em] text-slate-900 sm:text-[1.75rem]">
+-              {skills} verified skills · {timed}-minute sessions · human review
++              {timed}-minute assessments · Docker hidden harness · human review
+             </p>
+             <p className="mt-2 font-mono text-[11px] text-slate-500">
+-              {profiles} public {profiles === 1 ? "profile" : "profiles"} published
++              Demo data: {skills} verified skill{skills === 1 ? "" : "s"} · {profiles} public{" "}
++              {profiles === 1 ? "profile" : "profiles"}
+             </p>
+           </div>
+           <Link
+             href={`/u/${sampleSlug}`}
+             className="text-sm font-medium text-[var(--brand)] transition hover:text-[var(--brand-hover)]"
+           >
+-            Open a live qualification profile →
++            Open a sample qualification profile →
+           </Link>
+         </div>
+       </section>
+@@ -187,11 +188,11 @@ export function LandingPage(props: {
+             },
+             {
+               t: "One judge for both sides",
+-              d: "Public examples and hidden harnesses in TypeScript, JavaScript, Python, Go, Rust, and Java.",
++              d: "Public examples plus server-side hidden harnesses (Docker worker required). Without it, hidden suites fail closed.",
+             },
+             {
+               t: "Hire on evidence",
+-              d: "Shareable qualification pages and scorecards. Résumé claims stay claims until Crucible verifies them.",
++              d: "Shareable qualification pages and scorecards. Assessment and human-review skills only — résumé claims stay claims.",
+             },
+           ].map((item) => (
+             <div key={item.t}>
+diff --git a/src/lib/access.ts b/src/lib/access.ts
+index d41b0e5..a4041bc 100644
+--- a/src/lib/access.ts
++++ b/src/lib/access.ts
+@@ -86,8 +86,8 @@ export function homeForRole(role: string): string {
+   return (CANDIDATE_ROLES as readonly string[]).includes(role) ? "/learn" : "/dashboard";
+ }
+ 
+-/** Paths guests can use for the free Learn experience without signing in. */
+-export const GUEST_FREE_PREFIXES = ["/learn"] as const;
++/** Paths guests can use without signing in (nav + page guards). */
++export const GUEST_FREE_PREFIXES = ["/learn", "/challenges"] as const;
+ 
+ export function isGuestFreePath(pathname: string): boolean {
+   return GUEST_FREE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+-- 
+2.43.0
+

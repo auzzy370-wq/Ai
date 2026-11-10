@@ -1,0 +1,1012 @@
+From 162b32d194458ca4520ceb4c88ba8316917d37c5 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 18:32:34 +0000
+Subject: [PATCH] Boost SEO: metadata, sitemap, OG, JSON-LD, challenge pages
+
+Add keyword-rich per-route metadata, robots/sitemap (profiles +
+published challenges), Open Graph image, Organization/WebSite/
+LearningResource/Profile JSON-LD, and public /challenges/[slug]
+pages so the problem bank can rank in search.
+---
+ src/app/(app)/challenges/[slug]/page.tsx | 182 +++++++++++++++++++++++
+ src/app/(app)/challenges/page.tsx        |  16 ++
+ src/app/(app)/jobs/page.tsx              |  17 +++
+ src/app/(app)/learn/page.tsx             |  10 ++
+ src/app/(app)/pricing/page.tsx           |  10 ++
+ src/app/layout.tsx                       |  65 +++++++-
+ src/app/opengraph-image.tsx              |  40 +++++
+ src/app/page.tsx                         |  39 ++++-
+ src/app/robots.ts                        |  31 ++++
+ src/app/security/page.tsx                |  10 ++
+ src/app/sitemap.ts                       |  69 +++++++++
+ src/app/u/[slug]/page.tsx                |  67 ++++++++-
+ src/components/brand/crucible-lockup.tsx |  10 +-
+ src/components/challenges/problemset.tsx |  13 +-
+ src/components/marketing/landing.tsx     |   4 +-
+ src/lib/seo.ts                           | 143 ++++++++++++++++++
+ src/lib/utils.ts                         |   6 +-
+ 17 files changed, 707 insertions(+), 25 deletions(-)
+ create mode 100644 src/app/(app)/challenges/[slug]/page.tsx
+ create mode 100644 src/app/opengraph-image.tsx
+ create mode 100644 src/app/robots.ts
+ create mode 100644 src/app/sitemap.ts
+ create mode 100644 src/lib/seo.ts
+
+diff --git a/src/app/(app)/challenges/[slug]/page.tsx b/src/app/(app)/challenges/[slug]/page.tsx
+new file mode 100644
+index 0000000..18a35da
+--- /dev/null
++++ b/src/app/(app)/challenges/[slug]/page.tsx
+@@ -0,0 +1,182 @@
++import type { Metadata } from "next";
++import Link from "next/link";
++import { notFound } from "next/navigation";
++import { Badge } from "@/components/ui/badge";
++import { Button } from "@/components/ui/button";
++import { prisma } from "@/lib/db";
++import {
++  breadcrumbJsonLd,
++  jsonLdScript,
++  pageMetadata,
++  siteUrl,
++} from "@/lib/seo";
++import { trackLabel } from "@/lib/tracks";
++import { getSessionUser } from "@/server/auth/session";
++
++export const dynamic = "force-dynamic";
++
++async function loadChallenge(slug: string) {
++  return prisma.challenge.findFirst({
++    where: { slug, isPublished: true },
++    select: {
++      slug: true,
++      title: true,
++      summary: true,
++      description: true,
++      type: true,
++      track: true,
++      difficulty: true,
++      tags: true,
++      companies: true,
++      languages: true,
++      avgMinutes: true,
++      isPremium: true,
++      frequency: true,
++      updatedAt: true,
++    },
++  });
++}
++
++export async function generateMetadata({
++  params,
++}: {
++  params: Promise<{ slug: string }>;
++}): Promise<Metadata> {
++  const { slug } = await params;
++  const challenge = await loadChallenge(slug).catch(() => null);
++  if (!challenge) {
++    return pageMetadata({
++      title: "Challenge not found",
++      description: "This practice challenge is unavailable.",
++      path: `/challenges/${slug}`,
++      noIndex: true,
++    });
++  }
++  const companyBit = challenge.companies[0] ? ` · ${challenge.companies[0]}-style` : "";
++  const desc =
++    challenge.summary?.slice(0, 155) ||
++    `Practice ${challenge.title} — ${trackLabel(challenge.track)} coding challenge on Crucible.`;
++  return pageMetadata({
++    title: `${challenge.title}${companyBit} practice problem`,
++    description: desc,
++    path: `/challenges/${challenge.slug}`,
++    keywords: [
++      challenge.title,
++      ...challenge.tags.slice(0, 8),
++      ...challenge.companies.slice(0, 4),
++      "coding interview practice",
++      trackLabel(challenge.track),
++      "software engineer prep",
++    ],
++  });
++}
++
++export default async function ChallengeSeoPage({ params }: { params: Promise<{ slug: string }> }) {
++  const { slug } = await params;
++  const challenge = await loadChallenge(slug);
++  if (!challenge) notFound();
++
++  const user = await getSessionUser().catch(() => null);
++  const blurb =
++    challenge.description?.replace(/\s+/g, " ").trim().slice(0, 600) ||
++    challenge.summary ||
++    "Practice this challenge with public tests, then submit when the judge is online.";
++
++  const jsonLd = {
++    "@context": "https://schema.org",
++    "@type": "LearningResource",
++    name: challenge.title,
++    description: challenge.summary || blurb,
++    url: siteUrl(`/challenges/${challenge.slug}`),
++    learningResourceType: "Practice problem",
++    educationalLevel: `Difficulty ${challenge.difficulty}`,
++    timeRequired: `PT${Math.max(15, challenge.avgMinutes || 60)}M`,
++    keywords: [...challenge.tags, ...challenge.companies].join(", "),
++    inLanguage: "en",
++    isAccessibleForFree: !challenge.isPremium,
++    provider: { "@type": "Organization", name: "Crucible", url: siteUrl("/") },
++  };
++
++  return (
++    <main className="animate-rise mx-auto max-w-3xl space-y-8 px-1 py-4 sm:px-0">
++      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLdScript(jsonLd)} />
++      <script
++        type="application/ld+json"
++        dangerouslySetInnerHTML={jsonLdScript(
++          breadcrumbJsonLd([
++            { name: "Home", path: "/" },
++            { name: "Challenges", path: "/challenges" },
++            { name: challenge.title, path: `/challenges/${challenge.slug}` },
++          ]),
++        )}
++      />
++
++      <nav className="font-mono text-[11px] text-slate-500">
++        <Link href="/challenges" className="hover:text-slate-800">
++          Challenges
++        </Link>
++        <span className="mx-2">/</span>
++        <span className="text-slate-700">{challenge.slug}</span>
++      </nav>
++
++      <header className="space-y-3">
++        <p className="font-mono text-xs tracking-[0.28em] text-[var(--brand)]">PRACTICE PROBLEM</p>
++        <h1 className="font-serif-display text-3xl text-slate-900 sm:text-4xl">{challenge.title}</h1>
++        <p className="max-w-2xl text-base text-slate-600">{challenge.summary}</p>
++        <div className="flex flex-wrap gap-2">
++          <Badge variant="brand">{trackLabel(challenge.track)}</Badge>
++          <Badge>Difficulty {challenge.difficulty}</Badge>
++          <Badge>~{challenge.avgMinutes || 60} min</Badge>
++          {challenge.isPremium ? <Badge variant="amber">Premium</Badge> : <Badge variant="emerald">Free</Badge>}
++          {challenge.companies.slice(0, 4).map((c) => (
++            <Badge key={c}>{c}</Badge>
++          ))}
++        </div>
++      </header>
++
++      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-5">
++        <h2 className="text-lg font-semibold text-slate-900">What you&apos;ll practice</h2>
++        <p className="text-sm leading-relaxed text-slate-700">{blurb}{blurb.length >= 600 ? "…" : ""}</p>
++        {challenge.tags.length > 0 && (
++          <div className="flex flex-wrap gap-2 pt-1">
++            {challenge.tags.slice(0, 12).map((t) => (
++              <Badge key={t} variant="amber">
++                {t}
++              </Badge>
++            ))}
++          </div>
++        )}
++        {challenge.languages.length > 0 && (
++          <p className="font-mono text-xs text-slate-500">
++            Languages: {challenge.languages.slice(0, 8).join(", ")}
++          </p>
++        )}
++      </section>
++
++      <section className="flex flex-wrap gap-3">
++        {user ? (
++          <Link href="/challenges">
++            <Button>Open in problem bank</Button>
++          </Link>
++        ) : (
++          <>
++            <Link href={`/register?next=${encodeURIComponent(`/challenges/${challenge.slug}`)}`}>
++              <Button>Start practicing free</Button>
++            </Link>
++            <Link href="/challenges">
++              <Button variant="secondary">Browse all challenges</Button>
++            </Link>
++          </>
++        )}
++        <Link href="/jobs">
++          <Button variant="outline">See related jobs</Button>
++        </Link>
++      </section>
++
++      <p className="text-xs text-slate-500">
++        Part of Crucible&apos;s interview-prep bank — coding, systems, and cybersecurity practice with timed mocks and
++        shareable qualification profiles.
++      </p>
++    </main>
++  );
++}
+diff --git a/src/app/(app)/challenges/page.tsx b/src/app/(app)/challenges/page.tsx
+index 270fa89..72d8c7c 100644
+--- a/src/app/(app)/challenges/page.tsx
++++ b/src/app/(app)/challenges/page.tsx
+@@ -1,4 +1,6 @@
++import type { Metadata } from "next";
+ import { prisma } from "@/lib/db";
++import { pageMetadata } from "@/lib/seo";
+ import { getSessionUser, isPremium } from "@/server/auth/session";
+ import { Problemset } from "@/components/challenges/problemset";
+ import { isCodingProblem } from "@/server/challenges/coding-problems";
+@@ -8,6 +10,20 @@ import { JudgeBanner } from "@/components/layout/judge-banner";
+ import { stripeEnabled } from "@/server/saas/stripe";
+ import { getJudgeStatus } from "@/server/execution/judge-status";
+ 
++export const metadata: Metadata = pageMetadata({
++  title: "Coding interview practice problems & project challenges",
++  description:
++    "Browse a curated bank of coding interview questions, system design projects, and cybersecurity labs. Filter by company, difficulty, and tags — start free as a guest.",
++  path: "/challenges",
++  keywords: [
++    "coding interview questions",
++    "leetcode-style practice",
++    "system design challenges",
++    "cybersecurity labs",
++    "company-tagged problems",
++  ],
++});
++
+ /** First paint only — full library is browsed via /api/challenges search + load more. */
+ const CODING_LIMIT = 80;
+ const PROJECT_LIMIT = 40;
+diff --git a/src/app/(app)/jobs/page.tsx b/src/app/(app)/jobs/page.tsx
+index e197044..aa664c7 100644
+--- a/src/app/(app)/jobs/page.tsx
++++ b/src/app/(app)/jobs/page.tsx
+@@ -1,10 +1,27 @@
++import type { Metadata } from "next";
+ import { COMPANIES } from "@/lib/saas";
+ import { CANDIDATE_ROLES } from "@/lib/access";
++import { pageMetadata } from "@/lib/seo";
+ import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
+ import { JobsClient } from "@/components/jobs/jobs-client";
+ import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
+ import type { JobPosting } from "@/server/jobs/types";
+ 
++export const metadata: Metadata = pageMetadata({
++  title: "Software engineering, cybersecurity & remote jobs from official career boards",
++  description:
++    "Browse aggregated public openings from Google, Meta, Amazon, Apple, Microsoft, Stripe, Netflix, and more. Filter engineering, cybersecurity, and remote roles with yearly pay when listed.",
++  path: "/jobs",
++  keywords: [
++    "software engineer jobs",
++    "remote software engineer jobs",
++    "cybersecurity jobs",
++    "AppSec jobs",
++    "FAANG careers",
++    "tech jobs board",
++  ],
++});
++
+ export const dynamic = "force-dynamic";
+ export const maxDuration = 60;
+ 
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index 0dc58c3..7291086 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -1,8 +1,18 @@
++import type { Metadata } from "next";
+ import Link from "next/link";
+ import { Suspense } from "react";
+ import { CANDIDATE_ROLES } from "@/lib/access";
+ import { prisma } from "@/lib/db";
++import { pageMetadata } from "@/lib/seo";
+ import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
++
++export const metadata: Metadata = pageMetadata({
++  title: "Learn engineering craft — lessons, XP, and interview paths",
++  description:
++    "Free lessons for interview craft and AI craft, progress tracking, and guided practice paths for software engineering and cybersecurity.",
++  path: "/learn",
++  keywords: ["engineering lessons", "interview craft", "learn to code interviews", "cybersecurity lessons"],
++});
+ import { buildLearnerGameState, guestLearnerGameState, LESSON_XP } from "@/server/learning/gamification";
+ import { ARCADE_GAMES } from "@/server/learning/arcade-games";
+ import { ProgressHero } from "@/components/learn/progress-hero";
+diff --git a/src/app/(app)/pricing/page.tsx b/src/app/(app)/pricing/page.tsx
+index f5ffccb..62ba4fd 100644
+--- a/src/app/(app)/pricing/page.tsx
++++ b/src/app/(app)/pricing/page.tsx
+@@ -1,8 +1,18 @@
++import type { Metadata } from "next";
+ import { Suspense } from "react";
++import { pageMetadata } from "@/lib/seo";
+ import { getSessionUser, isPremium } from "@/server/auth/session";
+ import { PricingClient } from "@/components/saas/pricing-client";
+ import { stripeEnabled } from "@/server/saas/stripe";
+ 
++export const metadata: Metadata = pageMetadata({
++  title: "Pricing — free practice & premium interview prep",
++  description:
++    "Start free with lessons and the problem bank. Upgrade for premium mocks, deeper assessments, and advanced prep tools for software engineering and cybersecurity careers.",
++  path: "/pricing",
++  keywords: ["interview prep pricing", "premium coding practice", "engineering assessment plans"],
++});
++
+ export default async function PricingPage() {
+   const user = await getSessionUser();
+   const mockBilling = process.env.ALLOW_MOCK_BILLING === "true";
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 4b20ba3..1455fa5 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -3,6 +3,7 @@ import { IBM_Plex_Sans, IBM_Plex_Mono, IBM_Plex_Serif } from "next/font/google";
+ import { ExtensionHydrationGuard } from "@/components/layout/extension-hydration-guard";
+ import { Providers } from "@/components/layout/providers";
+ import { ThemeToaster } from "@/components/layout/theme-toaster";
++import { DEFAULT_DESCRIPTION, SITE_NAME, SITE_TAGLINE, siteOrigin, siteUrl } from "@/lib/seo";
+ import "./globals.css";
+ 
+ const sans = IBM_Plex_Sans({
+@@ -24,9 +25,67 @@ const mono = IBM_Plex_Mono({
+ });
+ 
+ export const metadata: Metadata = {
+-  title: "CRUCIBLE",
+-  description:
+-    "CRUCIBLE — learn engineering craft with lessons, a curated problem bank, and timed assessments. Hidden judging needs a Docker worker.",
++  metadataBase: new URL(siteOrigin()),
++  title: {
++    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
++    template: `%s · ${SITE_NAME}`,
++  },
++  description: DEFAULT_DESCRIPTION,
++  applicationName: SITE_NAME,
++  authors: [{ name: SITE_NAME }],
++  creator: SITE_NAME,
++  publisher: SITE_NAME,
++  category: "education",
++  keywords: [
++    "software engineering interview prep",
++    "coding practice problems",
++    "cybersecurity training",
++    "timed coding assessments",
++    "tech hiring assessments",
++    "engineering qualification profile",
++    "remote software engineer jobs",
++    "AppSec practice",
++    "system design practice",
++    "mock technical interviews",
++  ],
++  alternates: { canonical: "/" },
++  robots: {
++    index: true,
++    follow: true,
++    googleBot: {
++      index: true,
++      follow: true,
++      "max-snippet": -1,
++      "max-image-preview": "large",
++      "max-video-preview": -1,
++    },
++  },
++  openGraph: {
++    type: "website",
++    locale: "en_US",
++    url: siteOrigin(),
++    siteName: SITE_NAME,
++    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
++    description: DEFAULT_DESCRIPTION,
++    images: [
++      {
++        url: siteUrl("/brand/crucible-lockup.png"),
++        width: 1200,
++        height: 630,
++        alt: "Crucible engineering craft practice",
++      },
++    ],
++  },
++  twitter: {
++    card: "summary_large_image",
++    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
++    description: DEFAULT_DESCRIPTION,
++    images: [siteUrl("/brand/crucible-lockup.png")],
++  },
++  icons: {
++    icon: [{ url: "/favicon.ico" }, { url: "/brand/favicon-mark.png", type: "image/png" }],
++    apple: [{ url: "/apple-icon.png" }],
++  },
+ };
+ 
+ export const viewport = {
+diff --git a/src/app/opengraph-image.tsx b/src/app/opengraph-image.tsx
+new file mode 100644
+index 0000000..6bfd5b4
+--- /dev/null
++++ b/src/app/opengraph-image.tsx
+@@ -0,0 +1,40 @@
++import { ImageResponse } from "next/og";
++
++export const runtime = "edge";
++export const alt = "Crucible — Learn the craft. Hire the proof.";
++export const size = { width: 1200, height: 630 };
++export const contentType = "image/png";
++
++export default function OpenGraphImage() {
++  return new ImageResponse(
++    (
++      <div
++        style={{
++          width: "100%",
++          height: "100%",
++          display: "flex",
++          flexDirection: "column",
++          justifyContent: "space-between",
++          padding: 72,
++          background: "linear-gradient(145deg, #1a120c 0%, #2a1810 45%, #ff5a1f 160%)",
++          color: "#fff7f2",
++          fontFamily: "ui-sans-serif, system-ui, sans-serif",
++        }}
++      >
++        <div style={{ display: "flex", fontSize: 28, letterSpacing: 8, opacity: 0.85 }}>CRUCIBLE</div>
++        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
++          <div style={{ fontSize: 72, fontWeight: 700, lineHeight: 1.05, letterSpacing: -2 }}>
++            Learn the craft. Hire the proof.
++          </div>
++          <div style={{ fontSize: 28, opacity: 0.88, maxWidth: 900, lineHeight: 1.35 }}>
++            Coding interview practice, cybersecurity labs, timed assessments, and official tech job links.
++          </div>
++        </div>
++        <div style={{ display: "flex", fontSize: 22, opacity: 0.75 }}>
++          Lessons · Problem bank · Mocks · Qualification profiles · Jobs
++        </div>
++      </div>
++    ),
++    { ...size },
++  );
++}
+diff --git a/src/app/page.tsx b/src/app/page.tsx
+index 3090598..44a4345 100644
+--- a/src/app/page.tsx
++++ b/src/app/page.tsx
+@@ -1,9 +1,32 @@
++import type { Metadata } from "next";
+ import { redirect } from "next/navigation";
+ import { LandingPage } from "@/components/marketing/landing";
+ import { homeForRole } from "@/lib/access";
+ import { prisma } from "@/lib/db";
++import {
++  DEFAULT_DESCRIPTION,
++  jsonLdScript,
++  organizationJsonLd,
++  pageMetadata,
++  SITE_TAGLINE,
++  websiteJsonLd,
++} from "@/lib/seo";
+ import { getSessionUser } from "@/server/auth/session";
+ 
++export const metadata: Metadata = pageMetadata({
++  title: `Software engineering interview prep & hiring proof — ${SITE_TAGLINE}`,
++  description: DEFAULT_DESCRIPTION,
++  path: "/",
++  keywords: [
++    "software engineering interview prep",
++    "coding practice platform",
++    "cybersecurity interview practice",
++    "timed coding assessments",
++    "tech hiring scorecards",
++    "remote software engineer jobs",
++  ],
++});
++
+ /** Guests see the marketing landing; signed-in users go to their role home. */
+ export default async function Home() {
+   try {
+@@ -38,11 +61,15 @@ export default async function Home() {
+   }
+ 
+   return (
+-    <LandingPage
+-      verifiedSkills={verifiedSkills}
+-      timedSessions={60}
+-      publicProfiles={publicProfiles}
+-      sampleProfileSlug={sampleProfileSlug}
+-    />
++    <>
++      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLdScript(organizationJsonLd())} />
++      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLdScript(websiteJsonLd())} />
++      <LandingPage
++        verifiedSkills={verifiedSkills}
++        timedSessions={60}
++        publicProfiles={publicProfiles}
++        sampleProfileSlug={sampleProfileSlug}
++      />
++    </>
+   );
+ }
+diff --git a/src/app/robots.ts b/src/app/robots.ts
+new file mode 100644
+index 0000000..2f5e57d
+--- /dev/null
++++ b/src/app/robots.ts
+@@ -0,0 +1,31 @@
++import type { MetadataRoute } from "next";
++import { siteOrigin } from "@/lib/seo";
++
++export default function robots(): MetadataRoute.Robots {
++  const origin = siteOrigin();
++  return {
++    rules: [
++      {
++        userAgent: "*",
++        allow: ["/", "/learn", "/challenges", "/challenges/", "/jobs", "/security", "/pricing", "/u/"],
++        disallow: [
++          "/api/",
++          "/admin/",
++          "/settings",
++          "/dashboard",
++          "/workspace",
++          "/candidates",
++          "/assessments",
++          "/reviews",
++          "/incidents",
++          "/sign-in",
++          "/sign-up",
++          "/login",
++          "/register",
++        ],
++      },
++    ],
++    sitemap: `${origin}/sitemap.xml`,
++    host: origin,
++  };
++}
+diff --git a/src/app/security/page.tsx b/src/app/security/page.tsx
+index f7f14cc..9c5000d 100644
+--- a/src/app/security/page.tsx
++++ b/src/app/security/page.tsx
+@@ -1,6 +1,16 @@
++import type { Metadata } from "next";
+ import Link from "next/link";
+ import { Shield, Lock, Eye, Server, KeyRound, Globe } from "lucide-react";
+ import { CrucibleLockup } from "@/components/brand/crucible-lockup";
++import { pageMetadata } from "@/lib/seo";
++
++export const metadata: Metadata = pageMetadata({
++  title: "Security measures — sessions, CSRF, sandboxing",
++  description:
++    "How Crucible protects accounts and candidate code: HTTPS/HSTS, CSP, CSRF Origin checks, bcrypt passwords, rate limits, and Docker execution isolation.",
++  path: "/security",
++  keywords: ["platform security", "CSRF protection", "secure coding assessments"],
++});
+ 
+ const CONTROLS = [
+   {
+diff --git a/src/app/sitemap.ts b/src/app/sitemap.ts
+new file mode 100644
+index 0000000..b91ec35
+--- /dev/null
++++ b/src/app/sitemap.ts
+@@ -0,0 +1,69 @@
++import type { MetadataRoute } from "next";
++import { prisma } from "@/lib/db";
++import { siteUrl } from "@/lib/seo";
++
++export const dynamic = "force-dynamic";
++
++/** Only URLs that guests (and Google) can open without a login wall. */
++const STATIC: {
++  path: string;
++  changeFrequency: MetadataRoute.Sitemap[0]["changeFrequency"];
++  priority: number;
++}[] = [
++  { path: "/", changeFrequency: "weekly", priority: 1 },
++  { path: "/learn", changeFrequency: "weekly", priority: 0.9 },
++  { path: "/challenges", changeFrequency: "daily", priority: 0.95 },
++  { path: "/jobs", changeFrequency: "hourly", priority: 0.9 },
++  { path: "/security", changeFrequency: "monthly", priority: 0.45 },
++  { path: "/pricing", changeFrequency: "monthly", priority: 0.7 },
++];
++
++export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
++  const now = new Date();
++  const entries: MetadataRoute.Sitemap = STATIC.map((s) => ({
++    url: siteUrl(s.path),
++    lastModified: now,
++    changeFrequency: s.changeFrequency,
++    priority: s.priority,
++  }));
++
++  try {
++    const [profiles, challenges] = await Promise.all([
++      prisma.candidateProfile.findMany({
++        where: { publicEnabled: true, publicSlug: { not: null } },
++        select: { publicSlug: true, updatedAt: true },
++        take: 2000,
++        orderBy: { updatedAt: "desc" },
++      }),
++      prisma.challenge.findMany({
++        where: { isPublished: true },
++        select: { slug: true, updatedAt: true },
++        take: 8000,
++        orderBy: [{ frequency: "desc" }, { updatedAt: "desc" }],
++      }),
++    ]);
++
++    for (const p of profiles) {
++      if (!p.publicSlug) continue;
++      entries.push({
++        url: siteUrl(`/u/${p.publicSlug}`),
++        lastModified: p.updatedAt,
++        changeFrequency: "weekly",
++        priority: 0.8,
++      });
++    }
++
++    for (const c of challenges) {
++      entries.push({
++        url: siteUrl(`/challenges/${c.slug}`),
++        lastModified: c.updatedAt,
++        changeFrequency: "weekly",
++        priority: 0.72,
++      });
++    }
++  } catch {
++    /* DB unavailable — still ship static URLs */
++  }
++
++  return entries;
++}
+diff --git a/src/app/u/[slug]/page.tsx b/src/app/u/[slug]/page.tsx
+index 8a82a03..aa7aec1 100644
+--- a/src/app/u/[slug]/page.tsx
++++ b/src/app/u/[slug]/page.tsx
+@@ -1,7 +1,9 @@
++import type { Metadata } from "next";
+ import Link from "next/link";
+ import { notFound } from "next/navigation";
+ import { prisma } from "@/lib/db";
+ import { safeHref } from "@/lib/safe-url";
++import { jsonLdScript, pageMetadata, profileJsonLd } from "@/lib/seo";
+ import { Badge } from "@/components/ui/badge";
+ import { formatScore } from "@/lib/utils";
+ import { trackBadgeVariant, trackLabel } from "@/lib/tracks";
+@@ -9,13 +11,8 @@ import { buildLearnerGameState } from "@/server/learning/gamification";
+ 
+ export const dynamic = "force-dynamic";
+ 
+-export default async function PublicQualificationProfile({
+-  params,
+-}: {
+-  params: Promise<{ slug: string }>;
+-}) {
+-  const { slug } = await params;
+-  const profile = await prisma.candidateProfile.findUnique({
++async function loadPublicProfile(slug: string) {
++  return prisma.candidateProfile.findUnique({
+     where: { publicSlug: slug },
+     include: {
+       skills: true,
+@@ -42,6 +39,46 @@ export default async function PublicQualificationProfile({
+       },
+     },
+   });
++}
++
++export async function generateMetadata({
++  params,
++}: {
++  params: Promise<{ slug: string }>;
++}): Promise<Metadata> {
++  const { slug } = await params;
++  const profile = await loadPublicProfile(slug).catch(() => null);
++  if (!profile || !profile.publicEnabled) {
++    return pageMetadata({
++      title: "Profile not found",
++      description: "This qualification profile is private or unavailable.",
++      path: `/u/${slug}`,
++      noIndex: true,
++    });
++  }
++  const name = profile.user.name || profile.publicSlug || "Engineer";
++  const headline = profile.headline || "Verified engineering qualification profile";
++  return pageMetadata({
++    title: `${name} — ${headline}`,
++    description: (profile.bio || headline).slice(0, 160),
++    path: `/u/${profile.publicSlug}`,
++    keywords: [
++      name,
++      "engineering qualification profile",
++      "verified skills",
++      trackLabel(profile.preferredTrack),
++      ...profile.skills.slice(0, 6).map((s) => s.name),
++    ],
++  });
++}
++
++export default async function PublicQualificationProfile({
++  params,
++}: {
++  params: Promise<{ slug: string }>;
++}) {
++  const { slug } = await params;
++  const profile = await loadPublicProfile(slug);
+   if (!profile || !profile.publicEnabled) notFound();
+ 
+   const verified = profile.skills.filter((s) => s.source === "ASSESSMENT" || s.source === "HUMAN_REVIEW");
+@@ -63,11 +100,25 @@ export default async function PublicQualificationProfile({
+     })
+     .filter(Boolean) as { href: string; label: string }[];
+ 
++  const verifiedSkillNames = verified.map((s) => s.name);
++
+   return (
+     <div className="min-h-screen">
++      <script
++        type="application/ld+json"
++        dangerouslySetInnerHTML={jsonLdScript(
++          profileJsonLd({
++            name: profile.user.name || profile.publicSlug || "Engineer",
++            slug: profile.publicSlug!,
++            headline: profile.headline,
++            bio: profile.bio,
++            skills: verifiedSkillNames,
++          }),
++        )}
++      />
+       <div className="pointer-events-none absolute inset-0 grid-overlay opacity-40" />
+       <header className="relative z-10 mx-auto flex max-w-4xl items-center justify-between px-6 py-6">
+-        <Link href="/" className="flex items-center gap-3">
++        <Link href="/" className="flex items-center gap-3" aria-label="Crucible home">
+           <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-orange-400/50 bg-orange-500/10 font-mono text-xs font-bold text-orange-700">
+             CR
+           </div>
+diff --git a/src/components/brand/crucible-lockup.tsx b/src/components/brand/crucible-lockup.tsx
+index 9e83a9c..602c4e6 100644
+--- a/src/components/brand/crucible-lockup.tsx
++++ b/src/components/brand/crucible-lockup.tsx
+@@ -8,7 +8,7 @@ export function CrucibleGlyph({ className }: { className?: string }) {
+     <span className={cn("relative block", className)}>
+       <Image
+         src="/brand/crucible-mark-dark.png"
+-        alt=""
++        alt="Crucible"
+         width={128}
+         height={128}
+         priority
+@@ -16,7 +16,7 @@ export function CrucibleGlyph({ className }: { className?: string }) {
+       />
+       <Image
+         src="/brand/crucible-mark-light.png"
+-        alt=""
++        alt="Crucible"
+         width={128}
+         height={128}
+         className="hidden h-full w-full object-contain [:where(html.light)_&]:block"
+@@ -98,7 +98,11 @@ export function CrucibleLockup({
+ 
+   if (!href) return inner;
+   return (
+-    <Link href={href} className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40">
++    <Link
++      href={href}
++      aria-label="Crucible home"
++      className="min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40"
++    >
+       {inner}
+     </Link>
+   );
+diff --git a/src/components/challenges/problemset.tsx b/src/components/challenges/problemset.tsx
+index 5fe4815..e11538b 100644
+--- a/src/components/challenges/problemset.tsx
++++ b/src/components/challenges/problemset.tsx
+@@ -612,7 +612,11 @@ export function Problemset(props: {
+                           {starred ? "★" : "☆"}
+                         </button>
+                       </div>
+-                      <h2 className="mt-0.5 text-base font-medium leading-snug text-slate-900">{p.title}</h2>
++                      <h2 className="mt-0.5 text-base font-medium leading-snug text-slate-900">
++                        <Link href={`/challenges/${p.slug}`} className="hover:text-orange-800 hover:underline">
++                          {p.title}
++                        </Link>
++                      </h2>
+                       <p className="mt-1 line-clamp-2 text-xs text-slate-500">{p.summary}</p>
+                     </div>
+                     <span className={cn("shrink-0 text-sm font-medium", diffClass(L))}>{L}</span>
+@@ -724,7 +728,12 @@ export function Problemset(props: {
+                       <td className="px-4 py-3 font-mono text-slate-500">{i + 1}</td>
+                       <td className="px-4 py-3">
+                         <div className="flex flex-wrap items-center gap-2">
+-                          <span className="font-medium text-slate-900">{p.title}</span>
++                          <Link
++                            href={`/challenges/${p.slug}`}
++                            className="font-medium text-slate-900 hover:text-orange-800 hover:underline"
++                          >
++                            {p.title}
++                          </Link>
+                           {props.checkoutAvailable && p.isPremium && <Badge variant="amber">Premium</Badge>}
+                           {p.editorialSlug && (
+                             <Link
+diff --git a/src/components/marketing/landing.tsx b/src/components/marketing/landing.tsx
+index 2e6b7c8..8887c93 100644
+--- a/src/components/marketing/landing.tsx
++++ b/src/components/marketing/landing.tsx
+@@ -16,7 +16,7 @@ export function LandingPage(props: {
+   const sampleSlug = props.sampleProfileSlug ?? "casey-elite";
+ 
+   return (
+-    <div className="landing-root relative min-h-screen overflow-x-clip">
++    <main className="landing-root relative min-h-screen overflow-x-clip">
+       <section className="landing-hero-plane relative isolate flex flex-col sm:min-h-[100svh]">
+         <div className="pointer-events-none absolute inset-0" aria-hidden>
+           <div className="landing-hero-glow absolute inset-0" />
+@@ -146,6 +146,6 @@ export function LandingPage(props: {
+           </div>
+         </div>
+       </section>
+-    </div>
++    </main>
+   );
+ }
+diff --git a/src/lib/seo.ts b/src/lib/seo.ts
+new file mode 100644
+index 0000000..dfbdc59
+--- /dev/null
++++ b/src/lib/seo.ts
+@@ -0,0 +1,143 @@
++import type { Metadata } from "next";
++
++const PRODUCTION_HOST = "https://crucible-arena-rho.vercel.app";
++
++/** Canonical site origin for metadata, sitemap, and JSON-LD. */
++export function siteOrigin() {
++  const raw =
++    process.env.NEXT_PUBLIC_APP_URL ||
++    process.env.APP_URL ||
++    process.env.CURSOR_APP_URL ||
++    PRODUCTION_HOST;
++  return raw.replace(/\/$/, "");
++}
++
++export function siteUrl(path = "/") {
++  const p = path.startsWith("/") ? path : `/${path}`;
++  return `${siteOrigin()}${p === "/" ? "" : p}`;
++}
++
++export const SITE_NAME = "Crucible";
++export const SITE_TAGLINE = "Learn the craft. Hire the proof.";
++
++export const DEFAULT_DESCRIPTION =
++  "Practice software engineering and cybersecurity with lessons, a curated coding problem bank, timed interview mocks, and shareable qualification profiles — plus official job links from top tech careers boards.";
++
++const OG_IMAGE = {
++  url: "/brand/crucible-lockup.png",
++  width: 1200,
++  height: 630,
++  alt: "Crucible — engineering craft practice and hiring proof",
++} as const;
++
++type PageMetaInput = {
++  title: string;
++  description: string;
++  path: string;
++  keywords?: string[];
++  noIndex?: boolean;
++  image?: string;
++};
++
++/** Build consistent Metadata for a public page. */
++export function pageMetadata(input: PageMetaInput): Metadata {
++  const url = siteUrl(input.path);
++  const image = input.image || OG_IMAGE.url;
++  const title = input.title;
++
++  return {
++    title,
++    description: input.description,
++    keywords: input.keywords,
++    alternates: { canonical: url },
++    robots: input.noIndex
++      ? { index: false, follow: false }
++      : { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large" } },
++    openGraph: {
++      type: "website",
++      locale: "en_US",
++      url,
++      siteName: SITE_NAME,
++      title: `${title} · ${SITE_NAME}`,
++      description: input.description,
++      images: [{ ...OG_IMAGE, url: image.startsWith("http") ? image : siteUrl(image) }],
++    },
++    twitter: {
++      card: "summary_large_image",
++      title: `${title} · ${SITE_NAME}`,
++      description: input.description,
++      images: [image.startsWith("http") ? image : siteUrl(image)],
++    },
++  };
++}
++
++export function jsonLdScript(data: Record<string, unknown> | Record<string, unknown>[]) {
++  return {
++    __html: JSON.stringify(data).replace(/</g, "\\u003c"),
++  };
++}
++
++export function organizationJsonLd() {
++  return {
++    "@context": "https://schema.org",
++    "@type": "Organization",
++    name: SITE_NAME,
++    url: siteOrigin(),
++    logo: siteUrl("/brand/crucible-mark.png"),
++    description: DEFAULT_DESCRIPTION,
++    sameAs: [] as string[],
++  };
++}
++
++export function websiteJsonLd() {
++  return {
++    "@context": "https://schema.org",
++    "@type": "WebSite",
++    name: SITE_NAME,
++    url: siteOrigin(),
++    description: DEFAULT_DESCRIPTION,
++    potentialAction: {
++      "@type": "SearchAction",
++      target: {
++        "@type": "EntryPoint",
++        urlTemplate: `${siteOrigin()}/challenges?q={search_term_string}`,
++      },
++      "query-input": "required name=search_term_string",
++    },
++  };
++}
++
++export function breadcrumbJsonLd(items: { name: string; path: string }[]) {
++  return {
++    "@context": "https://schema.org",
++    "@type": "BreadcrumbList",
++    itemListElement: items.map((item, i) => ({
++      "@type": "ListItem",
++      position: i + 1,
++      name: item.name,
++      item: siteUrl(item.path),
++    })),
++  };
++}
++
++export function profileJsonLd(input: {
++  name: string;
++  slug: string;
++  headline?: string | null;
++  bio?: string | null;
++  skills: string[];
++}) {
++  return {
++    "@context": "https://schema.org",
++    "@type": "ProfilePage",
++    name: `${input.name} — qualification profile`,
++    url: siteUrl(`/u/${input.slug}`),
++    mainEntity: {
++      "@type": "Person",
++      name: input.name,
++      description: input.headline || input.bio || undefined,
++      url: siteUrl(`/u/${input.slug}`),
++      knowsAbout: input.skills.length ? input.skills : undefined,
++    },
++  };
++}
+diff --git a/src/lib/utils.ts b/src/lib/utils.ts
+index 1acb420..aaaad11 100644
+--- a/src/lib/utils.ts
++++ b/src/lib/utils.ts
+@@ -10,6 +10,10 @@ export function formatScore(n: number, digits = 1) {
+ }
+ 
+ export function absoluteUrl(path = "") {
+-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3847";
++  const base =
++    process.env.NEXT_PUBLIC_APP_URL ||
++    process.env.APP_URL ||
++    process.env.CURSOR_APP_URL ||
++    "https://crucible-arena-rho.vercel.app";
+   return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+ }
+-- 
+2.43.0
+

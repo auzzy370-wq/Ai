@@ -1,0 +1,688 @@
+From 2506b4835d7c99c7547b1f99167aca96a58a81ad Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 22:01:48 +0000
+Subject: [PATCH] Add job descriptions and speed up Jobs first paint
+
+Show short posting blurbs when available, warm Jobs via SSR, parallelize
+board fetches, and filter focus/search on the client so the list stays snappy.
+---
+ src/app/(app)/jobs/page.tsx         |  30 +++++-
+ src/app/api/jobs/route.ts           |   3 +
+ src/components/jobs/jobs-client.tsx | 120 ++++++++++++++++-----
+ src/server/jobs/adapters.ts         |  35 ++++---
+ src/server/jobs/catalog.ts          | 156 +++++++++++++---------------
+ src/server/jobs/decode.ts           |  19 ++++
+ src/server/jobs/types.ts            |   2 +
+ 7 files changed, 241 insertions(+), 124 deletions(-)
+
+diff --git a/src/app/(app)/jobs/page.tsx b/src/app/(app)/jobs/page.tsx
+index 22ee8c9..e197044 100644
+--- a/src/app/(app)/jobs/page.tsx
++++ b/src/app/(app)/jobs/page.tsx
+@@ -2,8 +2,36 @@ import { COMPANIES } from "@/lib/saas";
+ import { CANDIDATE_ROLES } from "@/lib/access";
+ import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
+ import { JobsClient } from "@/components/jobs/jobs-client";
++import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
++import type { JobPosting } from "@/server/jobs/types";
++
++export const dynamic = "force-dynamic";
++export const maxDuration = 60;
+ 
+ export default async function JobsPage() {
+   await requirePageRolesOrGuest("/jobs", [...CANDIDATE_ROLES, "SUPER_ADMIN", "HIRING_MANAGER", "TECHNICAL_REVIEWER"]);
+-  return <JobsClient companies={COMPANIES} />;
++
++  let initialJobs: JobPosting[] = [];
++  let initialByCompany: Record<string, { ok: boolean; count: number; error: string | null }> = {};
++  let initialRefreshedAt: string | null = null;
++
++  try {
++    const board = await getJobBoard();
++    initialJobs = flattenJobs(board.results);
++    initialByCompany = Object.fromEntries(
++      board.results.map((r) => [r.company, { ok: r.ok, count: r.jobs.length, error: r.error ?? null }]),
++    );
++    initialRefreshedAt = board.refreshedAt;
++  } catch {
++    // Client will fetch /api/jobs if SSR warm fails.
++  }
++
++  return (
++    <JobsClient
++      companies={COMPANIES}
++      initialJobs={initialJobs}
++      initialByCompany={initialByCompany}
++      initialRefreshedAt={initialRefreshedAt}
++    />
++  );
+ }
+diff --git a/src/app/api/jobs/route.ts b/src/app/api/jobs/route.ts
+index 7a8f7a8..b00c8f2 100644
+--- a/src/app/api/jobs/route.ts
++++ b/src/app/api/jobs/route.ts
+@@ -4,6 +4,8 @@ import { jsonOk, withHandler } from "@/server/auth/api";
+ import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
+ import { matchesJobFocus, type JobFocus } from "@/server/jobs/decode";
+ 
++export const maxDuration = 60;
++
+ const Query = z.object({
+   company: z.string().optional(),
+   q: z.string().optional(),
+@@ -39,6 +41,7 @@ export async function GET(req: Request) {
+           j.location.toLowerCase().includes(needle) ||
+           (j.team?.toLowerCase().includes(needle) ?? false) ||
+           j.company.toLowerCase().includes(needle) ||
++          (j.summary?.toLowerCase().includes(needle) ?? false) ||
+           (j.salaryLabel?.toLowerCase().includes(needle) ?? false),
+       );
+     }
+diff --git a/src/components/jobs/jobs-client.tsx b/src/components/jobs/jobs-client.tsx
+index 499bbb7..7937e49 100644
+--- a/src/components/jobs/jobs-client.tsx
++++ b/src/components/jobs/jobs-client.tsx
+@@ -31,29 +31,66 @@ const FOCUS_OPTIONS: { id: JobFocus; label: string }[] = [
+   { id: "cybersecurity", label: "Cybersecurity" },
+ ];
+ 
+-export function JobsClient(props: { companies: readonly JobCompany[] }) {
++function looksLikeCyber(title: string) {
++  return /\b(cyber\s*security|cybersecurity|information security|infosec|appsec|product security|application security|security engineer|security analyst|security architect|security researcher|security consultant|penetration|pen\s*test|red team|blue team|purple team|threat intel|threat intelligence|threat detection|detection engineer|soc analyst|soc engineer|incident response|malware|vulnerability|offensive security|defensive security|cloud security|network security|identity security|zero[\s-]?trust|cryptograph|ciso|grc|devsecops|secure coding)\b/i.test(
++    title,
++  );
++}
++
++function matchesFocus(title: string, focus: JobFocus) {
++  if (focus === "all") return true;
++  if (focus === "cybersecurity") return looksLikeCyber(title);
++  return !looksLikeCyber(title);
++}
++
++function sortJobs(list: JobPosting[]) {
++  return [...list].sort((a, b) => {
++    const aPay = a.salaryMin != null && a.salaryMax != null;
++    const bPay = b.salaryMin != null && b.salaryMax != null;
++    if (aPay !== bPay) return aPay ? -1 : 1;
++    if (aPay && bPay) {
++      const aMid = ((a.salaryMin ?? 0) + (a.salaryMax ?? 0)) / 2;
++      const bMid = ((b.salaryMin ?? 0) + (b.salaryMax ?? 0)) / 2;
++      return bMid - aMid;
++    }
++    return 0;
++  });
++}
++
++export function JobsClient(props: {
++  companies: readonly JobCompany[];
++  initialJobs?: JobPosting[];
++  initialByCompany?: Record<string, BoardMeta>;
++  initialRefreshedAt?: string | null;
++}) {
+   const [company, setCompany] = useState<string>("All");
+   const [focus, setFocus] = useState<JobFocus>("all");
+   const [q, setQ] = useState("");
+-  const [jobs, setJobs] = useState<JobPosting[]>([]);
+-  const [byCompany, setByCompany] = useState<Record<string, BoardMeta>>({});
+-  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+-  const [loading, setLoading] = useState(true);
++  const [debouncedQ, setDebouncedQ] = useState("");
++  const [boardJobs, setBoardJobs] = useState<JobPosting[]>(props.initialJobs ?? []);
++  const [byCompany, setByCompany] = useState<Record<string, BoardMeta>>(props.initialByCompany ?? {});
++  const [refreshedAt, setRefreshedAt] = useState<string | null>(props.initialRefreshedAt ?? null);
++  const [loading, setLoading] = useState(!(props.initialJobs && props.initialJobs.length));
++  const [refreshing, setRefreshing] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+ 
++  useEffect(() => {
++    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
++    return () => window.clearTimeout(t);
++  }, [q]);
++
+   const load = useCallback(async (refresh = false) => {
+-    setLoading(true);
++    if (refresh) setRefreshing(true);
++    else setLoading(true);
+     setError(null);
+     try {
+       const params = new URLSearchParams();
+-      if (company !== "All") params.set("company", company);
+-      if (focus !== "all") params.set("focus", focus);
+-      if (q.trim()) params.set("q", q.trim());
++      // Pull the full board once; filters stay client-side for snappy focus/search.
+       if (refresh) params.set("refresh", "1");
+       const res = await fetch(`/api/jobs?${params.toString()}`);
+       const json = await res.json();
+       if (!json.ok) throw new Error(json.error?.message || "Could not load jobs");
+-      setJobs(json.data.jobs);
++      setBoardJobs(json.data.jobs ?? []);
+       setByCompany(json.data.byCompany ?? {});
+       setRefreshedAt(json.data.refreshedAt ?? null);
+     } catch (e) {
+@@ -62,12 +99,42 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+       toast.error(msg);
+     } finally {
+       setLoading(false);
++      setRefreshing(false);
+     }
+-  }, [company, focus, q]);
++  }, []);
+ 
+   useEffect(() => {
++    if (props.initialJobs && props.initialJobs.length) return;
+     void load(false);
+-  }, [load]);
++  }, [load, props.initialJobs]);
++
++  const jobs = useMemo(() => {
++    const needle = debouncedQ.toLowerCase();
++    const filtered = boardJobs.filter((j) => {
++      if (company !== "All" && j.company !== company) return false;
++      if (!matchesFocus(j.title, focus)) return false;
++      if (!needle) return true;
++      return (
++        j.title.toLowerCase().includes(needle) ||
++        j.location.toLowerCase().includes(needle) ||
++        (j.team?.toLowerCase().includes(needle) ?? false) ||
++        j.company.toLowerCase().includes(needle) ||
++        (j.summary?.toLowerCase().includes(needle) ?? false) ||
++        (j.salaryLabel?.toLowerCase().includes(needle) ?? false)
++      );
++    });
++    return sortJobs(filtered);
++  }, [boardJobs, company, focus, debouncedQ]);
++
++  const companyCounts = useMemo(() => {
++    const counts: Record<string, number> = {};
++    for (const c of props.companies) counts[c] = 0;
++    for (const j of boardJobs) {
++      if (!matchesFocus(j.title, focus)) continue;
++      counts[j.company] = (counts[j.company] ?? 0) + 1;
++    }
++    return counts;
++  }, [boardJobs, focus, props.companies]);
+ 
+   const failing = useMemo(
+     () =>
+@@ -77,6 +144,8 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+     [byCompany],
+   );
+ 
++  const busy = loading || refreshing;
++
+   return (
+     <div className="animate-rise space-y-6">
+       <header className="rounded-2xl border border-[var(--brand)]/30 bg-[var(--surface-elevated)] p-5 sm:p-7">
+@@ -85,9 +154,8 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+           Official openings from company career boards
+         </h1>
+         <p className="mt-2 max-w-2xl text-slate-600">
+-          Aggregated public postings for software engineering and cybersecurity (Greenhouse and company career
+-          sites) — not Crucible-hosted applications. When a posting discloses pay, we show the yearly range.
+-          Apply on the employer&apos;s page; prep here with a matching mock.
++          Aggregated public postings for software engineering and cybersecurity — not Crucible-hosted applications.
++          Cards include a short description and yearly pay when the employer lists it.
+         </p>
+         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+           <Briefcase className="h-3.5 w-3.5" />
+@@ -100,6 +168,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+               · refreshed <LocalTime value={refreshedAt} />
+             </span>
+           )}
++          {refreshing ? <span>· updating feeds…</span> : null}
+         </div>
+       </header>
+ 
+@@ -150,9 +219,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+               )}
+             >
+               {c}
+-              {byCompany[c] ? (
+-                <span className="ml-1 text-[10px] text-slate-500">{byCompany[c]!.count}</span>
+-              ) : null}
++              <span className="ml-1 text-[10px] text-slate-500">{companyCounts[c] ?? 0}</span>
+             </button>
+           ))}
+         </div>
+@@ -164,24 +231,18 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+             placeholder={
+               focus === "cybersecurity"
+                 ? "Filter AppSec, SOC, cloud security…"
+-                : "Filter title, location, team…"
++                : "Filter title, description, location…"
+             }
+             className="sm:flex-1"
+-            onKeyDown={(e) => {
+-              if (e.key === "Enter") void load(false);
+-            }}
+           />
+           <div className="flex gap-2">
+-            <Button variant="secondary" onClick={() => void load(false)} disabled={loading}>
+-              Search
+-            </Button>
+             <Button
+               variant="outline"
+               onClick={() => void load(true)}
+-              disabled={loading}
++              disabled={busy}
+               aria-label="Refresh job feeds"
+             >
+-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
++              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+               Refresh
+             </Button>
+           </div>
+@@ -219,7 +280,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+               className="rounded-2xl border border-slate-200 bg-white/80 p-4 transition hover:border-[var(--brand)]/40"
+             >
+               <div className="flex flex-wrap items-start justify-between gap-3">
+-                <div className="min-w-0 space-y-2">
++                <div className="min-w-0 flex-1 space-y-2">
+                   <div className="flex flex-wrap gap-2">
+                     <Badge variant="brand">{job.company}</Badge>
+                     <Badge>{SOURCE_LABEL[job.source]}</Badge>
+@@ -227,6 +288,9 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+                   </div>
+                   <h2 className="font-serif-display text-lg text-slate-900">{job.title}</h2>
+                   <p className="text-sm text-slate-600">{job.location}</p>
++                  {job.summary ? (
++                    <p className="max-w-3xl text-sm leading-relaxed text-slate-600">{job.summary}</p>
++                  ) : null}
+                   {job.salaryLabel ? (
+                     <p className="text-sm font-medium text-slate-900">
+                       <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--brand)]">
+diff --git a/src/server/jobs/adapters.ts b/src/server/jobs/adapters.ts
+index ba84052..a77ab11 100644
+--- a/src/server/jobs/adapters.ts
++++ b/src/server/jobs/adapters.ts
+@@ -1,5 +1,5 @@
+ import type { JobCompany, JobPosting, JobSource } from "./types";
+-import { decodeHtml, looksLikeEngRole, titleFromSlug } from "./decode";
++import { decodeHtml, looksLikeEngRole, summarizeJobText, titleFromSlug } from "./decode";
+ import { parseYearlySalary } from "./salary";
+ 
+ /** Merge board pages / keyword searches and keep first occurrence per id. */
+@@ -52,18 +52,23 @@ function post(
+   return { company, source, ...partial };
+ }
+ 
+-function withSalary(
++function enrichFromText(
+   partial: Omit<JobPosting, "company" | "source">,
+   text: string | null | undefined,
+ ): Omit<JobPosting, "company" | "source"> {
+   const sal = parseYearlySalary(text);
+-  if (!sal) return partial;
++  const summary = summarizeJobText(text) ?? partial.summary ?? null;
+   return {
+     ...partial,
+-    salaryMin: sal.min,
+-    salaryMax: sal.max,
+-    salaryLabel: sal.label,
+-    salaryCurrency: sal.currency,
++    ...(summary ? { summary } : {}),
++    ...(sal
++      ? {
++          salaryMin: sal.min,
++          salaryMax: sal.max,
++          salaryLabel: sal.label,
++          salaryCurrency: sal.currency,
++        }
++      : {}),
+   };
+ }
+ 
+@@ -86,7 +91,7 @@ export async function fetchGreenhouse(company: JobCompany, board: string): Promi
+       post(
+         company,
+         "greenhouse",
+-        withSalary(
++        enrichFromText(
+           {
+             id: `gh-${board}-${j.id}`,
+             title: decodeHtml(j.title),
+@@ -114,6 +119,7 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
+       posted_date?: string;
+       job_category?: string;
+       description?: string;
++      description_short?: string;
+       basic_qualifications?: string;
+     }[];
+   }>(url);
+@@ -123,10 +129,11 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
+     .map((j) => {
+       const id = String(j.id || j.job_id || "");
+       const path = j.job_path?.startsWith("/") ? j.job_path : `/en/jobs/${id}`;
++      const body = `${j.description_short || ""}\n${j.description || ""}\n${j.basic_qualifications || ""}`;
+       return post(
+         "Amazon",
+         "amazon",
+-        withSalary(
++        enrichFromText(
+           {
+             id: `amzn-${id}`,
+             title: decodeHtml(j.title!),
+@@ -134,8 +141,9 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
+             team: j.job_category || undefined,
+             url: `https://www.amazon.jobs${path}`,
+             postedAt: j.posted_date ?? null,
++            summary: summarizeJobText(j.description_short) ?? undefined,
+           },
+-          `${j.description || ""}\n${j.basic_qualifications || ""}`,
++          body,
+         ),
+       );
+     });
+@@ -159,6 +167,7 @@ export async function fetchGoogle(query = "Software Engineer"): Promise<JobPosti
+         id: `goog-${id}`,
+         title,
+         location: "See posting",
++        summary: `${title} at Google — open the official careers posting for the full description.`,
+         url: `https://www.google.com/about/careers/applications/jobs/results/${id}-${slug}`,
+       }),
+     );
+@@ -190,6 +199,7 @@ export async function fetchApple(query = "software engineer"): Promise<JobPostin
+         id: `apple-${id}`,
+         title,
+         location: "See posting",
++        summary: `${title} at Apple — open the official jobs posting for the full description.`,
+         url: `https://jobs.apple.com${m[1]}`,
+       }),
+     );
+@@ -218,7 +228,7 @@ export async function fetchNetflix(query = "software engineer"): Promise<JobPost
+       post(
+         "Netflix",
+         "netflix",
+-        withSalary(
++        enrichFromText(
+           {
+             id: `nflx-${p.id}`,
+             title: decodeHtml(p.name),
+@@ -255,7 +265,7 @@ export async function fetchShopify(): Promise<JobPosting[]> {
+       post(
+         "Shopify",
+         "shopify",
+-        withSalary(
++        enrichFromText(
+           {
+             id: `shopify-${id}`,
+             title,
+@@ -315,6 +325,7 @@ export async function fetchLinkedInCompany(
+         id: `li-${company}-${c.url.match(/(\d+)\/?$/)?.[1] || i}`,
+         title: c.title,
+         location: c.location,
++        summary: `${c.title} at ${company} — open the LinkedIn listing for the full description.`,
+         url: c.url,
+       }),
+     );
+diff --git a/src/server/jobs/catalog.ts b/src/server/jobs/catalog.ts
+index dd31034..bc32fb8 100644
+--- a/src/server/jobs/catalog.ts
++++ b/src/server/jobs/catalog.ts
+@@ -123,15 +123,20 @@ const CAREERS_SEARCH_CYBER: Record<JobCompany, { url: string; source: JobSource
+ 
+ function browseFallback(company: JobCompany, focus: "engineering" | "cybersecurity" = "engineering"): JobPosting {
+   const dest = focus === "cybersecurity" ? CAREERS_SEARCH_CYBER[company] : CAREERS_SEARCH[company];
++  const title =
++    focus === "cybersecurity"
++      ? `Browse ${company} cybersecurity roles`
++      : `Browse ${company} engineering roles`;
+   return {
+     id: `browse-${focus}-${company}`,
+     company,
+-    title:
+-      focus === "cybersecurity"
+-        ? `Browse ${company} cybersecurity roles`
+-        : `Browse ${company} engineering roles`,
++    title,
+     location: "Official careers site",
+     team: focus === "cybersecurity" ? "Security search" : "Open search",
++    summary:
++      focus === "cybersecurity"
++        ? `Jump to ${company}'s official careers search for security and cybersecurity openings.`
++        : `Jump to ${company}'s official careers search for software and engineering openings.`,
+     url: dest.url,
+     source: dest.source,
+   };
+@@ -144,55 +149,45 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+     switch (company) {
+       case "Google":
+         jobs = mergeJobLists(
+-          await fetchGoogle("Software Engineer"),
+-          await fetchGoogle("Security Engineer"),
+-          await fetchGoogle("Cybersecurity"),
++          ...(await Promise.all([
++            fetchGoogle("Software Engineer"),
++            fetchGoogle("Security Engineer"),
++            fetchGoogle("Cybersecurity"),
++          ])),
+         );
+         break;
+       case "Amazon":
+         jobs = mergeJobLists(
+-          await fetchAmazon("software engineer"),
+-          await fetchAmazon("security engineer"),
+-          await fetchAmazon("cybersecurity"),
++          ...(await Promise.all([
++            fetchAmazon("software engineer"),
++            fetchAmazon("security engineer"),
++            fetchAmazon("cybersecurity"),
++          ])),
+         );
+         break;
+       case "Meta":
+         jobs = mergeJobLists(
+-          await fetchLinkedInCompany("Meta", {
+-            companyId: 10667,
+-            keywords: "software engineer",
+-          }),
+-          await fetchLinkedInCompany("Meta", {
+-            companyId: 10667,
+-            keywords: "security engineer",
+-          }),
+-          await fetchLinkedInCompany("Meta", {
+-            companyId: 10667,
+-            keywords: "cybersecurity",
+-          }),
++          ...(await Promise.all([
++            fetchLinkedInCompany("Meta", { companyId: 10667, keywords: "software engineer" }),
++            fetchLinkedInCompany("Meta", { companyId: 10667, keywords: "security engineer" }),
++          ])),
+         );
+         break;
+       case "Apple":
+         jobs = mergeJobLists(
+-          await fetchApple("software engineer"),
+-          await fetchApple("security engineer"),
+-          await fetchApple("cybersecurity"),
++          ...(await Promise.all([
++            fetchApple("software engineer"),
++            fetchApple("security engineer"),
++            fetchApple("cybersecurity"),
++          ])),
+         );
+         break;
+       case "Microsoft":
+         jobs = mergeJobLists(
+-          await fetchLinkedInCompany("Microsoft", {
+-            companyId: 1035,
+-            keywords: "software engineer",
+-          }),
+-          await fetchLinkedInCompany("Microsoft", {
+-            companyId: 1035,
+-            keywords: "security engineer",
+-          }),
+-          await fetchLinkedInCompany("Microsoft", {
+-            companyId: 1035,
+-            keywords: "cybersecurity",
+-          }),
++          ...(await Promise.all([
++            fetchLinkedInCompany("Microsoft", { companyId: 1035, keywords: "software engineer" }),
++            fetchLinkedInCompany("Microsoft", { companyId: 1035, keywords: "security engineer" }),
++          ])),
+         );
+         break;
+       case "Stripe":
+@@ -201,25 +196,25 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+         break;
+       case "Netflix":
+         jobs = mergeJobLists(
+-          await fetchNetflix("software engineer"),
+-          await fetchNetflix("security engineer"),
+-          await fetchNetflix("cybersecurity"),
++          ...(await Promise.all([
++            fetchNetflix("software engineer"),
++            fetchNetflix("security engineer"),
++            fetchNetflix("cybersecurity"),
++          ])),
+         );
+         break;
+       case "Uber":
+         jobs = mergeJobLists(
+-          await fetchLinkedInCompany("Uber", {
+-            keywords: 'Uber "Software Engineer"',
+-            requireCompanyName: "Uber",
+-          }),
+-          await fetchLinkedInCompany("Uber", {
+-            keywords: 'Uber "Security Engineer"',
+-            requireCompanyName: "Uber",
+-          }),
+-          await fetchLinkedInCompany("Uber", {
+-            keywords: "Uber cybersecurity",
+-            requireCompanyName: "Uber",
+-          }),
++          ...(await Promise.all([
++            fetchLinkedInCompany("Uber", {
++              keywords: 'Uber "Software Engineer"',
++              requireCompanyName: "Uber",
++            }),
++            fetchLinkedInCompany("Uber", {
++              keywords: 'Uber "Security Engineer"',
++              requireCompanyName: "Uber",
++            }),
++          ])),
+         );
+         break;
+       case "Cloudflare":
+@@ -227,34 +222,24 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+         break;
+       case "Bloomberg":
+         jobs = mergeJobLists(
+-          await fetchLinkedInCompany("Bloomberg", {
+-            keywords: 'Bloomberg "Software Engineer"',
+-            requireCompanyName: "Bloomberg",
+-          }),
+-          await fetchLinkedInCompany("Bloomberg", {
+-            keywords: 'Bloomberg "Security Engineer"',
+-            requireCompanyName: "Bloomberg",
+-          }),
+-          await fetchLinkedInCompany("Bloomberg", {
+-            keywords: "Bloomberg cybersecurity",
+-            requireCompanyName: "Bloomberg",
+-          }),
++          ...(await Promise.all([
++            fetchLinkedInCompany("Bloomberg", {
++              keywords: 'Bloomberg "Software Engineer"',
++              requireCompanyName: "Bloomberg",
++            }),
++            fetchLinkedInCompany("Bloomberg", {
++              keywords: 'Bloomberg "Security Engineer"',
++              requireCompanyName: "Bloomberg",
++            }),
++          ])),
+         );
+         break;
+       case "LinkedIn":
+         jobs = mergeJobLists(
+-          await fetchLinkedInCompany("LinkedIn", {
+-            companyId: 1337,
+-            keywords: "software engineer",
+-          }),
+-          await fetchLinkedInCompany("LinkedIn", {
+-            companyId: 1337,
+-            keywords: "security engineer",
+-          }),
+-          await fetchLinkedInCompany("LinkedIn", {
+-            companyId: 1337,
+-            keywords: "cybersecurity",
+-          }),
++          ...(await Promise.all([
++            fetchLinkedInCompany("LinkedIn", { companyId: 1337, keywords: "software engineer" }),
++            fetchLinkedInCompany("LinkedIn", { companyId: 1337, keywords: "security engineer" }),
++          ])),
+         );
+         break;
+       case "Shopify":
+@@ -278,14 +263,19 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+   }
+ }
+ 
+-/** Sequential with a short gap so LinkedIn guest endpoints stay polite. */
++/** Parallel company refresh with bounded concurrency (keeps LinkedIn polite). */
+ async function refreshAll(): Promise<JobBoardResult[]> {
+-  const results: JobBoardResult[] = [];
+-  for (const company of COMPANIES) {
+-    results.push(await loadCompany(company));
+-    await new Promise((r) => setTimeout(r, 250));
+-  }
+-  return results;
++  const companies = [...COMPANIES];
++  const out: JobBoardResult[] = new Array(companies.length);
++  let next = 0;
++  const workers = Array.from({ length: Math.min(4, companies.length) }, async () => {
++    while (next < companies.length) {
++      const idx = next++;
++      out[idx] = await loadCompany(companies[idx]!);
++    }
++  });
++  await Promise.all(workers);
++  return out;
+ }
+ 
+ export async function getJobBoard(opts?: { force?: boolean }): Promise<{
+diff --git a/src/server/jobs/decode.ts b/src/server/jobs/decode.ts
+index 7213085..cdecb77 100644
+--- a/src/server/jobs/decode.ts
++++ b/src/server/jobs/decode.ts
+@@ -12,6 +12,25 @@ export function decodeHtml(input: string): string {
+     .trim();
+ }
+ 
++/** Short plain-text blurb for Jobs cards (from posting HTML/text). */
++export function summarizeJobText(raw: string | null | undefined, maxLen = 200): string | null {
++  if (!raw) return null;
++  let text = decodeHtml(raw)
++    .replace(/<script[\s\S]*?<\/script>/gi, " ")
++    .replace(/<style[\s\S]*?<\/style>/gi, " ")
++    .replace(/<[^>]+>/g, " ")
++    .replace(/\s+/g, " ")
++    .trim();
++  text = text.replace(
++    /^(about (the )?(role|job|position|us)|overview|who we are|the role|job description)\s*[:.\-–—]?\s*/i,
++    "",
++  );
++  if (text.length < 48) return null;
++  if (text.length <= maxLen) return text;
++  const cut = text.slice(0, maxLen - 1);
++  return `${cut.replace(/\s+\S*$/, "").replace(/[.,;:\-–—\s]+$/, "")}…`;
++}
++
+ export function titleFromSlug(slug: string): string {
+   return decodeHtml(
+     slug
+diff --git a/src/server/jobs/types.ts b/src/server/jobs/types.ts
+index f76883e..eaee78f 100644
+--- a/src/server/jobs/types.ts
++++ b/src/server/jobs/types.ts
+@@ -17,6 +17,8 @@ export type JobPosting = {
+   title: string;
+   location: string;
+   team?: string;
++  /** Short plain-text blurb from the posting when available. */
++  summary?: string | null;
+   url: string;
+   source: JobSource;
+   postedAt?: string | null;
+-- 
+2.43.0
+

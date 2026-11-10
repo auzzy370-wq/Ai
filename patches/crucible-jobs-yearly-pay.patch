@@ -1,0 +1,381 @@
+From 3eed72b746fc071a05e334434ca1505885e65f3b Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 21:53:00 +0000
+Subject: [PATCH] Show yearly pay on Jobs when postings disclose it
+
+Parse salary ranges from Greenhouse/Amazon/Netflix/Shopify text,
+normalize to yearly USD labels, and surface them on the board.
+---
+ src/app/api/jobs/route.ts           |  16 +++-
+ src/components/jobs/jobs-client.tsx |  16 +++-
+ src/server/jobs/adapters.ts         | 120 ++++++++++++++++++++--------
+ src/server/jobs/salary.ts           |  91 +++++++++++++++++++++
+ src/server/jobs/types.ts            |   7 ++
+ 5 files changed, 216 insertions(+), 34 deletions(-)
+ create mode 100644 src/server/jobs/salary.ts
+
+diff --git a/src/app/api/jobs/route.ts b/src/app/api/jobs/route.ts
+index 6765bd2..7a8f7a8 100644
+--- a/src/app/api/jobs/route.ts
++++ b/src/app/api/jobs/route.ts
+@@ -38,10 +38,24 @@ export async function GET(req: Request) {
+           j.title.toLowerCase().includes(needle) ||
+           j.location.toLowerCase().includes(needle) ||
+           (j.team?.toLowerCase().includes(needle) ?? false) ||
+-          j.company.toLowerCase().includes(needle),
++          j.company.toLowerCase().includes(needle) ||
++          (j.salaryLabel?.toLowerCase().includes(needle) ?? false),
+       );
+     }
+ 
++    // Prefer postings that disclose yearly pay, then higher midpoints.
++    jobs = [...jobs].sort((a, b) => {
++      const aPay = a.salaryMin != null && a.salaryMax != null;
++      const bPay = b.salaryMin != null && b.salaryMax != null;
++      if (aPay !== bPay) return aPay ? -1 : 1;
++      if (aPay && bPay) {
++        const aMid = ((a.salaryMin ?? 0) + (a.salaryMax ?? 0)) / 2;
++        const bMid = ((b.salaryMin ?? 0) + (b.salaryMax ?? 0)) / 2;
++        return bMid - aMid;
++      }
++      return 0;
++    });
++
+     const byCompany = Object.fromEntries(
+       board.results.map((r) => [
+         r.company,
+diff --git a/src/components/jobs/jobs-client.tsx b/src/components/jobs/jobs-client.tsx
+index 73436f6..499bbb7 100644
+--- a/src/components/jobs/jobs-client.tsx
++++ b/src/components/jobs/jobs-client.tsx
+@@ -86,11 +86,15 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+         </h1>
+         <p className="mt-2 max-w-2xl text-slate-600">
+           Aggregated public postings for software engineering and cybersecurity (Greenhouse and company career
+-          sites) — not Crucible-hosted applications. Apply on the employer&apos;s page; prep here with a matching mock.
++          sites) — not Crucible-hosted applications. When a posting discloses pay, we show the yearly range.
++          Apply on the employer&apos;s page; prep here with a matching mock.
+         </p>
+         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+           <Briefcase className="h-3.5 w-3.5" />
+           <span>{jobs.length} roles shown</span>
++          {jobs.some((j) => j.salaryLabel) ? (
++            <span>· {jobs.filter((j) => j.salaryLabel).length} with listed yearly pay</span>
++          ) : null}
+           {refreshedAt && (
+             <span>
+               · refreshed <LocalTime value={refreshedAt} />
+@@ -223,6 +227,16 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+                   </div>
+                   <h2 className="font-serif-display text-lg text-slate-900">{job.title}</h2>
+                   <p className="text-sm text-slate-600">{job.location}</p>
++                  {job.salaryLabel ? (
++                    <p className="text-sm font-medium text-slate-900">
++                      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--brand)]">
++                        Yearly pay
++                      </span>
++                      <span className="mt-0.5 block">{job.salaryLabel}</span>
++                    </p>
++                  ) : (
++                    <p className="text-xs text-slate-400">Yearly pay not listed on this posting</p>
++                  )}
+                 </div>
+                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                   <a href={job.url} target="_blank" rel="noopener noreferrer" className="sm:w-auto">
+diff --git a/src/server/jobs/adapters.ts b/src/server/jobs/adapters.ts
+index 1cfe63a..ba84052 100644
+--- a/src/server/jobs/adapters.ts
++++ b/src/server/jobs/adapters.ts
+@@ -1,5 +1,6 @@
+ import type { JobCompany, JobPosting, JobSource } from "./types";
+ import { decodeHtml, looksLikeEngRole, titleFromSlug } from "./decode";
++import { parseYearlySalary } from "./salary";
+ 
+ /** Merge board pages / keyword searches and keep first occurrence per id. */
+ export function mergeJobLists(...lists: JobPosting[][]): JobPosting[] {
+@@ -51,21 +52,51 @@ function post(
+   return { company, source, ...partial };
+ }
+ 
++function withSalary(
++  partial: Omit<JobPosting, "company" | "source">,
++  text: string | null | undefined,
++): Omit<JobPosting, "company" | "source"> {
++  const sal = parseYearlySalary(text);
++  if (!sal) return partial;
++  return {
++    ...partial,
++    salaryMin: sal.min,
++    salaryMax: sal.max,
++    salaryLabel: sal.label,
++    salaryCurrency: sal.currency,
++  };
++}
++
+ export async function fetchGreenhouse(company: JobCompany, board: string): Promise<JobPosting[]> {
++  // content=true includes description HTML — needed for CA/NY pay ranges.
+   const data = await fetchJson<{
+-    jobs?: { id: number; title: string; absolute_url: string; location?: { name?: string }; updated_at?: string }[];
+-  }>(`https://boards-api.greenhouse.io/v1/boards/${board}/jobs`);
++    jobs?: {
++      id: number;
++      title: string;
++      absolute_url: string;
++      location?: { name?: string };
++      updated_at?: string;
++      content?: string;
++    }[];
++  }>(`https://boards-api.greenhouse.io/v1/boards/${board}/jobs?content=true`);
+   return (data.jobs ?? [])
+     .filter((j) => looksLikeEngRole(j.title))
+     .slice(0, 80)
+     .map((j) =>
+-      post(company, "greenhouse", {
+-        id: `gh-${board}-${j.id}`,
+-        title: decodeHtml(j.title),
+-        location: j.location?.name?.trim() || "See posting",
+-        url: j.absolute_url,
+-        postedAt: j.updated_at ?? null,
+-      }),
++      post(
++        company,
++        "greenhouse",
++        withSalary(
++          {
++            id: `gh-${board}-${j.id}`,
++            title: decodeHtml(j.title),
++            location: j.location?.name?.trim() || "See posting",
++            url: j.absolute_url,
++            postedAt: j.updated_at ?? null,
++          },
++          j.content,
++        ),
++      ),
+     );
+ }
+ 
+@@ -82,6 +113,8 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
+       country_code?: string;
+       posted_date?: string;
+       job_category?: string;
++      description?: string;
++      basic_qualifications?: string;
+     }[];
+   }>(url);
+   return (data.jobs ?? [])
+@@ -90,14 +123,21 @@ export async function fetchAmazon(query = "software engineer"): Promise<JobPosti
+     .map((j) => {
+       const id = String(j.id || j.job_id || "");
+       const path = j.job_path?.startsWith("/") ? j.job_path : `/en/jobs/${id}`;
+-      return post("Amazon", "amazon", {
+-        id: `amzn-${id}`,
+-        title: decodeHtml(j.title!),
+-        location: [j.city || j.location, j.country_code].filter(Boolean).join(", ") || "See posting",
+-        team: j.job_category || undefined,
+-        url: `https://www.amazon.jobs${path}`,
+-        postedAt: j.posted_date ?? null,
+-      });
++      return post(
++        "Amazon",
++        "amazon",
++        withSalary(
++          {
++            id: `amzn-${id}`,
++            title: decodeHtml(j.title!),
++            location: [j.city || j.location, j.country_code].filter(Boolean).join(", ") || "See posting",
++            team: j.job_category || undefined,
++            url: `https://www.amazon.jobs${path}`,
++            postedAt: j.posted_date ?? null,
++          },
++          `${j.description || ""}\n${j.basic_qualifications || ""}`,
++        ),
++      );
+     });
+ }
+ 
+@@ -169,19 +209,27 @@ export async function fetchNetflix(query = "software engineer"): Promise<JobPost
+       department?: string;
+       canonicalPositionUrl?: string;
+       t_create?: string;
++      job_description?: string;
+     }[];
+   }>(url);
+   return (data.positions ?? [])
+     .filter((p) => looksLikeEngRole(p.name))
+     .map((p) =>
+-      post("Netflix", "netflix", {
+-        id: `nflx-${p.id}`,
+-        title: decodeHtml(p.name),
+-        location: (p.locations?.[0] || p.location || "See posting").replace(/,/g, ", "),
+-        team: p.department,
+-        url: p.canonicalPositionUrl || `https://explore.jobs.netflix.net/careers/job/${p.id}`,
+-        postedAt: p.t_create ?? null,
+-      }),
++      post(
++        "Netflix",
++        "netflix",
++        withSalary(
++          {
++            id: `nflx-${p.id}`,
++            title: decodeHtml(p.name),
++            location: (p.locations?.[0] || p.location || "See posting").replace(/,/g, ", "),
++            team: p.department,
++            url: p.canonicalPositionUrl || `https://explore.jobs.netflix.net/careers/job/${p.id}`,
++            postedAt: p.t_create ?? null,
++          },
++          p.job_description,
++        ),
++      ),
+     );
+ }
+ 
+@@ -200,16 +248,24 @@ export async function fetchShopify(): Promise<JobPosting[]> {
+     const url = pick(chunk, "applyUrl") || pick(chunk, "url") || pick(chunk, "link");
+     const location = pick(chunk, "location") || pick(chunk, "city") || "See posting";
+     const team = pick(chunk, "department") || pick(chunk, "workplaceTypes") || undefined;
++    const description = pick(chunk, "description");
+     const id = pick(chunk, "partnerJobId") || pick(chunk, "id") || url;
+     if (!title || !url || !looksLikeEngRole(title)) continue;
+     jobs.push(
+-      post("Shopify", "shopify", {
+-        id: `shopify-${id}`,
+-        title,
+-        location,
+-        team,
+-        url: url.split("?")[0] || url,
+-      }),
++      post(
++        "Shopify",
++        "shopify",
++        withSalary(
++          {
++            id: `shopify-${id}`,
++            title,
++            location,
++            team,
++            url: url.split("?")[0] || url,
++          },
++          description,
++        ),
++      ),
+     );
+     if (jobs.length >= 80) break;
+   }
+diff --git a/src/server/jobs/salary.ts b/src/server/jobs/salary.ts
+new file mode 100644
+index 0000000..9e559ae
+--- /dev/null
++++ b/src/server/jobs/salary.ts
+@@ -0,0 +1,91 @@
++import { decodeHtml } from "./decode";
++
++export type SalaryInfo = {
++  /** Normalized yearly minimum (USD when currency is USD). */
++  min: number;
++  /** Normalized yearly maximum. */
++  max: number;
++  currency: string;
++  /** Display string, e.g. "$166,000 – $208,000 / year". */
++  label: string;
++};
++
++function money(raw: string, hadK: boolean): number {
++  let n = Number(String(raw).replace(/,/g, ""));
++  if (!Number.isFinite(n)) return NaN;
++  if (hadK) n *= 1000;
++  return Math.round(n);
++}
++
++function formatUsd(n: number): string {
++  return new Intl.NumberFormat("en-US", {
++    style: "currency",
++    currency: "USD",
++    maximumFractionDigits: 0,
++  }).format(n);
++}
++
++function plausibleYearly(min: number, max: number): boolean {
++  if (!(min > 0 && max >= min)) return false;
++  // Typical tech ranges; reject revenue/volume false positives.
++  if (min < 25_000 || max > 1_200_000) return false;
++  if (max / min > 8) return false;
++  return true;
++}
++
++/**
++ * Pull a yearly pay range from job description / board HTML when present
++ * (CA/NY pay transparency, Greenhouse salary blurbs, etc.).
++ */
++export function parseYearlySalary(raw: string | null | undefined): SalaryInfo | null {
++  if (!raw) return null;
++  let text = decodeHtml(raw);
++  text = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
++  if (!text) return null;
++
++  const patterns: RegExp[] = [
++    /(?:estimated\s+)?(?:annual\s+)?(?:base\s+)?(?:pay|salary|compensation)(?:\s+range)?(?:\s+for this role)?(?:\s+is|:)?\s*(?:of\s+)?(?:USD\s*)?\$?\s*([\d,]+(?:\.\d+)?)\s*(k)?\s*(?:-|–|—|to)\s*(?:USD\s*)?\$?\s*([\d,]+(?:\.\d+)?)\s*(k)?/i,
++    /salary\s*range\s*\$?\s*([\d,]+)\s*(k)?\s*(?:-|–|to)\s*\$?\s*([\d,]+)\s*(k)?/i,
++    /\$\s*([\d,]+)\s*(k)?\s*(?:-|–|to)\s*\$\s*([\d,]+)\s*(k)?\s*(?:USD)?\s*(?:per\s+year|\/\s*yr|\/\s*year|annually|a year)/i,
++    /(?:base\s+pay|total\s+target\s+cash)[^$]{0,40}\$\s*([\d,]+)\s*(k)?\s*(?:-|–|to)\s*\$?\s*([\d,]+)\s*(k)?/i,
++  ];
++
++  for (const pat of patterns) {
++    const m = text.match(pat);
++    if (!m) continue;
++    const min = money(m[1]!, Boolean(m[2]));
++    const max = money(m[3]!, Boolean(m[4]));
++    if (!plausibleYearly(min, max)) continue;
++    return {
++      min,
++      max,
++      currency: "USD",
++      label: `${formatUsd(min)} – ${formatUsd(max)} / year`,
++    };
++  }
++
++  // Hourly → yearly (US full-time ~2080 hours) when explicitly hourly.
++  const hourly = text.match(
++    /(?:hourly|per\s+hour|\/\s*hr|\/\s*hour)[^$]{0,20}\$\s*([\d,]+(?:\.\d+)?)\s*(?:-|–|to)\s*\$?\s*([\d,]+(?:\.\d+)?)/i,
++  ) || text.match(
++    /\$\s*([\d,]+(?:\.\d+)?)\s*(?:-|–|to)\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(?:per\s+hour|\/\s*hr|\/\s*hour|hourly)/i,
++  );
++  if (hourly) {
++    const minH = Number(hourly[1]!.replace(/,/g, ""));
++    const maxH = Number(hourly[2]!.replace(/,/g, ""));
++    if (minH >= 15 && maxH >= minH && maxH <= 500) {
++      const min = Math.round(minH * 2080);
++      const max = Math.round(maxH * 2080);
++      if (plausibleYearly(min, max)) {
++        return {
++          min,
++          max,
++          currency: "USD",
++          label: `${formatUsd(min)} – ${formatUsd(max)} / year`,
++        };
++      }
++    }
++  }
++
++  return null;
++}
+diff --git a/src/server/jobs/types.ts b/src/server/jobs/types.ts
+index 4317678..f76883e 100644
+--- a/src/server/jobs/types.ts
++++ b/src/server/jobs/types.ts
+@@ -20,6 +20,13 @@ export type JobPosting = {
+   url: string;
+   source: JobSource;
+   postedAt?: string | null;
++  /** Yearly pay floor when the posting discloses it. */
++  salaryMin?: number | null;
++  /** Yearly pay ceiling when the posting discloses it. */
++  salaryMax?: number | null;
++  /** Display string, e.g. "$166,000 – $208,000 / year". */
++  salaryLabel?: string | null;
++  salaryCurrency?: string | null;
+ };
+ 
+ export type JobBoardResult = {
+-- 
+2.43.0
+

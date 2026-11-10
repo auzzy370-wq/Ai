@@ -1,0 +1,1175 @@
+From 5dcd28c1abc13722f517b751e91e29c5a64457f8 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:51:26 +0000
+Subject: [PATCH] Add career paths that teach what each job needs
+
+Let learners pick a target role, auto-enroll the matching courses and
+practicums in order, and follow a syllabus framed around that job.
+---
+ src/app/(app)/career/page.tsx                |  31 ++
+ src/app/(app)/learn/page.tsx                 |  16 +
+ src/app/api/learn/career/route.ts            | 135 +++++
+ src/components/layout/app-shell.tsx          |   9 +-
+ src/components/learn/career-paths-client.tsx | 362 +++++++++++++
+ src/lib/access.ts                            |   3 +-
+ src/server/learning/career-paths.ts          | 512 +++++++++++++++++++
+ 7 files changed, 1064 insertions(+), 4 deletions(-)
+ create mode 100644 src/app/(app)/career/page.tsx
+ create mode 100644 src/app/api/learn/career/route.ts
+ create mode 100644 src/components/learn/career-paths-client.tsx
+ create mode 100644 src/server/learning/career-paths.ts
+
+diff --git a/src/app/(app)/career/page.tsx b/src/app/(app)/career/page.tsx
+new file mode 100644
+index 0000000..99cb6e3
+--- /dev/null
++++ b/src/app/(app)/career/page.tsx
+@@ -0,0 +1,31 @@
++import type { Metadata } from "next";
++import { Suspense } from "react";
++import { CANDIDATE_ROLES } from "@/lib/access";
++import { pageMetadata } from "@/lib/seo";
++import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
++import { CareerPathsClient } from "@/components/learn/career-paths-client";
++import { WelcomeSignIn } from "@/components/auth/welcome-sign-in";
++
++export const metadata: Metadata = pageMetadata({
++  title: "Career paths — learn what the job actually needs",
++  description:
++    "Choose a career target and run the courses, practicums, drills, and mocks that teach what that role hires for.",
++  path: "/career",
++  keywords: ["career path", "software engineer roadmap", "interview prep path", "learn for the job"],
++});
++
++export default async function CareerPage() {
++  const user = await requirePageRolesOrGuest("/career", CANDIDATE_ROLES);
++  return (
++    <div className="space-y-6">
++      {!user && (
++        <Suspense fallback={null}>
++          <WelcomeSignIn />
++        </Suspense>
++      )}
++      <Suspense fallback={<p className="text-slate-500">Loading career paths…</p>}>
++        <CareerPathsClient guest={!user} />
++      </Suspense>
++    </div>
++  );
++}
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index 2498787..648c7ac 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -119,6 +119,22 @@ export default async function LearnHubPage() {
+         </div>
+       </section>
+ 
++      <section className="space-y-3">
++        <div className="rounded-2xl border border-orange-300/50 bg-[var(--surface-elevated)] p-5">
++          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-orange-800/80">Start with the job</p>
++          <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-slate-900">Choose your career path</h2>
++          <p className="mt-1 max-w-2xl text-sm text-slate-600">
++            Backend, frontend, AI, security, new grad, full-stack — enroll the courses and practicums that job actually
++            needs, then run them in order.
++          </p>
++          <div className="mt-4">
++            <Link href="/career">
++              <Button>Pick a career path</Button>
++            </Link>
++          </div>
++        </div>
++      </section>
++
+       <section className="space-y-3">
+         <div>
+           <h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-900">Courses in session</h2>
+diff --git a/src/app/api/learn/career/route.ts b/src/app/api/learn/career/route.ts
+new file mode 100644
+index 0000000..e33e3ff
+--- /dev/null
++++ b/src/app/api/learn/career/route.ts
+@@ -0,0 +1,135 @@
++import { z } from "zod";
++import { prisma } from "@/lib/db";
++import { AppError } from "@/lib/errors";
++import { jsonOk, withHandler } from "@/server/auth/api";
++import { isPremium, requireUser, getSessionUser } from "@/server/auth/session";
++import { STUDY_PLANS, getStudyPlan } from "@/server/saas/study-plans";
++import {
++  CAREER_PATHS,
++  getCareerPath,
++  planSlugsForCareer,
++  scoreCareerProgress,
++} from "@/server/learning/career-paths";
++
++function readCareerSlug(knowledgeMap: unknown): string | null {
++  if (!knowledgeMap || typeof knowledgeMap !== "object") return null;
++  const career = (knowledgeMap as { careerPath?: { slug?: string } }).careerPath;
++  return career?.slug && typeof career.slug === "string" ? career.slug : null;
++}
++
++async function buildCareerPayload(userId: string | null) {
++  const premium = userId
++    ? isPremium(await prisma.user.findUniqueOrThrow({ where: { id: userId } }))
++    : false;
++
++  const enrollments = userId
++    ? await prisma.studyPlanEnrollment.findMany({ where: { userId } })
++    : [];
++  const enrMap = new Map(enrollments.map((e) => [e.planSlug, { completedSlugs: e.completedSlugs }]));
++  const planTotals = new Map(STUDY_PLANS.map((p) => [p.slug, p.challengeSlugs.length]));
++
++  let selectedSlug: string | null = null;
++  if (userId) {
++    const profile = await prisma.candidateProfile.findUnique({
++      where: { userId },
++      select: { knowledgeMap: true },
++    });
++    selectedSlug = readCareerSlug(profile?.knowledgeMap);
++  }
++
++  const paths = CAREER_PATHS.map((path) => {
++    const progress = scoreCareerProgress(path, enrMap, planTotals);
++    return {
++      ...path,
++      selected: selectedSlug === path.slug,
++      percent: progress.percent,
++      nextStageId: progress.nextStageId,
++      stageStats: progress.stageStats,
++      lockedPlanSlugs: path.stages
++        .map((s) => s.planSlug)
++        .filter((slug): slug is string => {
++          if (!slug) return false;
++          const plan = getStudyPlan(slug);
++          return Boolean(plan?.premium && !premium);
++        }),
++    };
++  });
++
++  return {
++    premium,
++    selectedSlug,
++    paths,
++    active: paths.find((p) => p.selected) ?? null,
++  };
++}
++
++export async function GET() {
++  return withHandler(async () => {
++    const user = await getSessionUser();
++    return jsonOk(await buildCareerPayload(user?.id ?? null));
++  });
++}
++
++const selectSchema = z.object({
++  pathSlug: z.string().min(2),
++});
++
++export async function POST(req: Request) {
++  return withHandler(async () => {
++    const user = await requireUser();
++    const body = selectSchema.parse(await req.json());
++    const path = getCareerPath(body.pathSlug);
++    if (!path) throw new AppError("Career path not found", 404, "NOT_FOUND");
++
++    const premium = isPremium(user);
++    const planSlugs = planSlugsForCareer(path);
++    const enrolled: string[] = [];
++    const skippedPremium: string[] = [];
++
++    for (const slug of planSlugs) {
++      const plan = getStudyPlan(slug);
++      if (!plan) continue;
++      if (plan.premium && !premium) {
++        skippedPremium.push(slug);
++        continue;
++      }
++      await prisma.studyPlanEnrollment.upsert({
++        where: { userId_planSlug: { userId: user.id, planSlug: slug } },
++        create: { userId: user.id, planSlug: slug },
++        update: {},
++      });
++      enrolled.push(slug);
++    }
++
++    const profile = await prisma.candidateProfile.upsert({
++      where: { userId: user.id },
++      create: {
++        userId: user.id,
++        knowledgeMap: { careerPath: { slug: path.slug, enrolledAt: new Date().toISOString() } },
++      },
++      update: {},
++      select: { knowledgeMap: true },
++    });
++
++    const prev =
++      profile.knowledgeMap && typeof profile.knowledgeMap === "object"
++        ? (profile.knowledgeMap as Record<string, unknown>)
++        : {};
++    await prisma.candidateProfile.update({
++      where: { userId: user.id },
++      data: {
++        knowledgeMap: {
++          ...prev,
++          careerPath: { slug: path.slug, enrolledAt: new Date().toISOString() },
++        },
++      },
++    });
++
++    return jsonOk({
++      pathSlug: path.slug,
++      enrolled,
++      skippedPremium,
++      ...(await buildCareerPayload(user.id)),
++    });
++  });
++}
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index 7502391..6cab13f 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -54,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
+     roles: ["CANDIDATE", "TEAM_MEMBER"],
+     items: [
+       { href: "/learn", label: "Learn", icon: BookOpen, hint: "Lessons, today’s goals, arcade" },
++      { href: "/career", label: "Career path", icon: Crosshair, hint: "Choose a job, run its syllabus" },
+       { href: "/challenges", label: "Practice", icon: Boxes, hint: "Problem bank" },
+       { href: "/interview", label: "Mocks", icon: Timer, hint: "Timed company rounds" },
+       { href: "/jobs", label: "Jobs", icon: Briefcase, hint: "Official career board links" },
+@@ -128,7 +129,9 @@ function isGuestOpen(href: string) {
+     href === "/jobs" ||
+     href.startsWith("/jobs/") ||
+     href === "/flashcards" ||
+-    href.startsWith("/flashcards/")
++    href.startsWith("/flashcards/") ||
++    href === "/career" ||
++    href.startsWith("/career/")
+   );
+ }
+ 
+@@ -332,13 +335,13 @@ export function AppShell({
+     : isGuest
+       ? ([
+           { href: "/learn", label: "Learn", icon: BookOpen },
++          { href: "/career", label: "Path", icon: Crosshair },
+           { href: "/challenges", label: "Practice", icon: Boxes },
+-          { href: "/flashcards", label: "Cards", icon: BookOpen },
+           { href: "/jobs", label: "Jobs", icon: Briefcase },
+         ] as const)
+       : ([
+           { href: "/learn", label: "Learn", icon: BookOpen },
+-          { href: "/challenges", label: "Practice", icon: Boxes },
++          { href: "/career", label: "Path", icon: Crosshair },
+           { href: "/interview", label: "Mocks", icon: Timer },
+           { href: "/jobs", label: "Jobs", icon: Briefcase },
+         ] as const);
+diff --git a/src/components/learn/career-paths-client.tsx b/src/components/learn/career-paths-client.tsx
+new file mode 100644
+index 0000000..6b5bab6
+--- /dev/null
++++ b/src/components/learn/career-paths-client.tsx
+@@ -0,0 +1,362 @@
++"use client";
++
++import Link from "next/link";
++import { useRouter, useSearchParams } from "next/navigation";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { toast } from "sonner";
++import { Badge } from "@/components/ui/badge";
++import { Button } from "@/components/ui/button";
++import { cn } from "@/lib/utils";
++
++type StageStat = {
++  id: string;
++  done: number;
++  total: number;
++  percent: number;
++  complete: boolean;
++  enrolled: boolean;
++};
++
++type Stage = {
++  id: string;
++  kind: string;
++  title: string;
++  teaches: string;
++  href: string;
++  planSlug?: string;
++  durationLabel: string;
++};
++
++type PathCard = {
++  slug: string;
++  title: string;
++  role: string;
++  department: string;
++  blurb: string;
++  outcomes: string[];
++  hiringSignal: string;
++  stages: Stage[];
++  selected: boolean;
++  percent: number;
++  nextStageId: string | null;
++  stageStats: StageStat[];
++  lockedPlanSlugs: string[];
++};
++
++const KIND_LABEL: Record<string, string> = {
++  course: "Lecture course",
++  practicum: "Practicum",
++  drill: "Drill",
++  mock: "Mock",
++  jobs: "Jobs",
++};
++
++export function CareerPathsClient(props: { guest: boolean }) {
++  const router = useRouter();
++  const search = useSearchParams();
++  const pathFromQuery = search.get("path");
++  const [paths, setPaths] = useState<PathCard[]>([]);
++  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
++  const [loading, setLoading] = useState(true);
++  const [busy, setBusy] = useState<string | null>(null);
++  const [focus, setFocus] = useState<string | null>(pathFromQuery);
++  const autoEnrolled = useRef(false);
++
++  const choose = useCallback(
++    async (pathSlug: string) => {
++      if (props.guest) {
++        router.push(`/register?next=${encodeURIComponent(`/career?path=${pathSlug}`)}`);
++        return;
++      }
++      setBusy(pathSlug);
++      try {
++        const res = await fetch("/api/learn/career", {
++          method: "POST",
++          headers: { "content-type": "application/json" },
++          body: JSON.stringify({ pathSlug }),
++        });
++        const json = await res.json();
++        if (!json.ok) throw new Error(json.error?.message || "Could not enroll");
++        setPaths(json.data.paths ?? []);
++        setSelectedSlug(json.data.selectedSlug ?? pathSlug);
++        setFocus(pathSlug);
++        const skipped = json.data.skippedPremium?.length ?? 0;
++        toast.success(
++          skipped
++            ? `Path chosen — enrolled in free stages (${skipped} Premium stage${skipped === 1 ? "" : "s"} locked)`
++            : "Path chosen — courses and practicums enrolled in order",
++        );
++        router.refresh();
++      } catch (e) {
++        toast.error(e instanceof Error ? e.message : "Could not enroll");
++      } finally {
++        setBusy(null);
++      }
++    },
++    [props.guest, router],
++  );
++
++  const load = useCallback(async () => {
++    setLoading(true);
++    try {
++      const res = await fetch("/api/learn/career");
++      const json = await res.json();
++      if (!json.ok) throw new Error(json.error?.message || "Failed");
++      setPaths(json.data.paths ?? []);
++      setSelectedSlug(json.data.selectedSlug ?? null);
++      const active = json.data.active?.slug ?? json.data.selectedSlug ?? null;
++      setFocus((prev) => prev ?? pathFromQuery ?? active ?? json.data.paths?.[0]?.slug ?? null);
++    } catch (e) {
++      toast.error(e instanceof Error ? e.message : "Failed to load career paths");
++    } finally {
++      setLoading(false);
++    }
++  }, [pathFromQuery]);
++
++  useEffect(() => {
++    void load();
++  }, [load]);
++
++  useEffect(() => {
++    if (
++      autoEnrolled.current ||
++      props.guest ||
++      !pathFromQuery ||
++      selectedSlug ||
++      busy ||
++      !paths.some((p) => p.slug === pathFromQuery)
++    ) {
++      return;
++    }
++    autoEnrolled.current = true;
++    void choose(pathFromQuery);
++  }, [props.guest, pathFromQuery, paths, selectedSlug, busy, choose]);
++
++  const active = useMemo(
++    () => paths.find((p) => p.slug === (focus ?? selectedSlug)) ?? paths[0] ?? null,
++    [paths, focus, selectedSlug],
++  );
++
++  if (loading) {
++    return <p className="text-slate-500">Loading career paths…</p>;
++  }
++
++  const nextStage = active?.stages.find((s) => s.id === active.nextStageId) ?? active?.stages[0];
++  const nextStat = active?.stageStats.find((s) => s.id === nextStage?.id);
++
++  return (
++    <div className="animate-rise space-y-8">
++      <header className="space-y-3">
++        <p className="font-mono text-xs tracking-[0.3em] text-orange-700">CAREER PATHS</p>
++        <h1 className="font-serif-display text-2xl sm:text-3xl">Choose the job. We teach the path.</h1>
++        <p className="max-w-2xl text-slate-600">
++          Pick a career target. Crucible enrolls you in the lecture courses and practicums that role actually needs —
++          in order — so it feels like a real program for that job, not a random checklist.
++        </p>
++      </header>
++
++      {selectedSlug && (
++        <section className="rounded-2xl border border-orange-300/60 bg-[var(--surface-elevated)] p-5 sm:p-6">
++          {(() => {
++            const sel = paths.find((p) => p.slug === selectedSlug);
++            if (!sel) return null;
++            const nxt = sel.stages.find((s) => s.id === sel.nextStageId) ?? sel.stages[0];
++            return (
++              <>
++                <div className="flex flex-wrap items-end justify-between gap-3">
++                  <div>
++                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-orange-700/80">Your path</p>
++                    <h2 className="mt-1 font-serif-display text-2xl text-slate-900">{sel.title}</h2>
++                    <p className="mt-1 text-sm text-slate-600">{sel.percent}% through the program · {sel.hiringSignal}</p>
++                  </div>
++                  <Badge variant="amber">{sel.role}</Badge>
++                </div>
++                <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/80">
++                  <div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${sel.percent}%` }} />
++                </div>
++                {nxt && (
++                  <div className="mt-4 flex flex-wrap items-center gap-2">
++                    <Link href={nxt.href}>
++                      <Button>Continue: {nxt.title}</Button>
++                    </Link>
++                    <Button variant="secondary" onClick={() => setFocus(sel.slug)}>
++                      View full syllabus
++                    </Button>
++                  </div>
++                )}
++              </>
++            );
++          })()}
++        </section>
++      )}
++
++      <section className="space-y-3">
++        <div className="flex flex-wrap items-end justify-between gap-2">
++          <h2 className="font-serif-display text-xl text-slate-900">Pick a career</h2>
++          <p className="text-sm text-slate-500">{paths.length} paths · choose one to enroll the syllabus</p>
++        </div>
++        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
++          {paths.map((p) => (
++            <button
++              key={p.slug}
++              type="button"
++              onClick={() => setFocus(p.slug)}
++              className={cn(
++                "rounded-2xl border p-4 text-left transition",
++                focus === p.slug
++                  ? "border-orange-400 bg-orange-50/80 shadow-sm"
++                  : p.selected
++                    ? "border-emerald-300 bg-emerald-50/50"
++                    : "border-slate-200 bg-white/80 hover:border-orange-300",
++              )}
++            >
++              <div className="flex flex-wrap gap-2">
++                <Badge variant="brand">{p.department}</Badge>
++                {p.selected && <Badge variant="emerald">Active</Badge>}
++                {p.percent > 0 && <Badge variant="amber">{p.percent}%</Badge>}
++              </div>
++              <h3 className="mt-3 font-serif-display text-lg text-slate-900">{p.title}</h3>
++              <p className="mt-1 line-clamp-3 text-sm text-slate-600">{p.blurb}</p>
++              <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
++                {p.stages.length} stages · {p.role}
++              </p>
++            </button>
++          ))}
++        </div>
++      </section>
++
++      {active && (
++        <section className="space-y-5 rounded-2xl border border-slate-200 bg-white/85 p-5 sm:p-7">
++          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
++            <div className="max-w-2xl">
++              <div className="flex flex-wrap gap-2">
++                <Badge variant="brand">{active.department}</Badge>
++                <Badge>{active.role}</Badge>
++                {active.selected && <Badge variant="emerald">Your path</Badge>}
++              </div>
++              <h2 className="mt-3 font-serif-display text-2xl text-slate-900">{active.title}</h2>
++              <p className="mt-2 text-slate-600">{active.blurb}</p>
++              <p className="mt-2 text-sm text-slate-500">{active.hiringSignal}</p>
++              <ul className="mt-4 grid gap-2 sm:grid-cols-2">
++                {active.outcomes.map((o) => (
++                  <li key={o} className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-700">
++                    {o}
++                  </li>
++                ))}
++              </ul>
++            </div>
++            <div className="flex shrink-0 flex-col gap-2">
++              <Button disabled={busy === active.slug} onClick={() => void choose(active.slug)}>
++                {busy === active.slug
++                  ? "Enrolling…"
++                  : props.guest
++                    ? "Sign in to take this path"
++                    : active.selected
++                      ? "Re-sync enrollments"
++                      : "Choose this path"}
++              </Button>
++              {nextStage && (
++                <Link href={nextStage.href}>
++                  <Button variant="secondary" className="w-full">
++                    {active.selected ? "Continue next stage" : "Preview first stage"}
++                  </Button>
++                </Link>
++              )}
++              <Link href="/study-plans">
++                <Button variant="ghost" className="w-full">
++                  Open course catalog →
++                </Button>
++              </Link>
++            </div>
++          </div>
++
++          <div>
++            <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
++              <h3 className="font-serif-display text-lg text-slate-900">Program syllabus</h3>
++              <span className="font-mono text-xs text-slate-500">
++                {active.percent}% complete
++                {nextStat && nextStat.total > 0
++                  ? ` · next ${nextStat.done}/${nextStat.total}`
++                  : ""}
++              </span>
++            </div>
++            <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100">
++              <div
++                className="h-full rounded-full bg-orange-500 transition-[width]"
++                style={{ width: `${active.percent}%` }}
++              />
++            </div>
++            <ol className="relative space-y-3 border-l border-orange-200 pl-4">
++              {active.stages.map((stage, idx) => {
++                const stat = active.stageStats.find((s) => s.id === stage.id);
++                const locked = Boolean(stage.planSlug && active.lockedPlanSlugs.includes(stage.planSlug));
++                const isNext = stage.id === active.nextStageId;
++                return (
++                  <li key={stage.id} className="relative">
++                    <span
++                      className={cn(
++                        "absolute -left-[1.4rem] top-4 h-2.5 w-2.5 rounded-full border-2",
++                        stat?.complete
++                          ? "border-emerald-500 bg-emerald-400"
++                          : isNext
++                            ? "border-orange-500 bg-orange-400"
++                            : "border-slate-300 bg-white",
++                      )}
++                    />
++                    <div
++                      className={cn(
++                        "rounded-xl border px-4 py-3",
++                        stat?.complete
++                          ? "border-emerald-200 bg-emerald-50/60"
++                          : isNext
++                            ? "border-orange-400 bg-orange-50/80"
++                            : "border-slate-200 bg-white/90",
++                      )}
++                    >
++                      <div className="flex flex-wrap items-center gap-2">
++                        <span className="font-mono text-[10px] text-slate-500">
++                          Stage {String(idx + 1).padStart(2, "0")}
++                        </span>
++                        <Badge variant="brand">{KIND_LABEL[stage.kind] ?? stage.kind}</Badge>
++                        <Badge>{stage.durationLabel}</Badge>
++                        {stat?.complete && <Badge variant="emerald">Complete</Badge>}
++                        {isNext && !stat?.complete && <Badge variant="amber">Up next</Badge>}
++                        {locked && <Badge variant="amber">Premium</Badge>}
++                      </div>
++                      <h4 className="mt-2 font-medium text-slate-900">{stage.title}</h4>
++                      <p className="mt-1 text-sm text-slate-600">
++                        <span className="font-medium text-slate-800">Teaches: </span>
++                        {stage.teaches}
++                      </p>
++                      {stat && stat.total > 0 && (
++                        <div className="mt-3">
++                          <div className="mb-1 flex justify-between font-mono text-[10px] text-slate-500">
++                            <span>
++                              {stat.done}/{stat.total} items
++                            </span>
++                            <span>{stat.percent}%</span>
++                          </div>
++                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
++                            <div
++                              className="h-full rounded-full bg-orange-500"
++                              style={{ width: `${stat.percent}%` }}
++                            />
++                          </div>
++                        </div>
++                      )}
++                      <div className="mt-3">
++                        <Link href={locked ? "/pricing" : stage.href} className="text-sm text-orange-800 hover:underline">
++                          {locked ? "Unlock Premium to open →" : isNext ? "Enter this stage →" : "Open →"}
++                        </Link>
++                      </div>
++                    </div>
++                  </li>
++                );
++              })}
++            </ol>
++          </div>
++        </section>
++      )}
++    </div>
++  );
++}
+diff --git a/src/lib/access.ts b/src/lib/access.ts
+index 1f9110b..110c533 100644
+--- a/src/lib/access.ts
++++ b/src/lib/access.ts
+@@ -45,6 +45,7 @@ export const PAGE_ROLE_ACCESS: { prefix: string; roles: readonly string[] }[] =
+   { prefix: "/contest", roles: CANDIDATE_ROLES },
+   { prefix: "/study-plans", roles: CANDIDATE_ROLES },
+   { prefix: "/roadmap", roles: CANDIDATE_ROLES },
++  { prefix: "/career", roles: CANDIDATE_ROLES },
+   { prefix: "/learn", roles: CANDIDATE_ROLES },
+   { prefix: "/interview", roles: CANDIDATE_ROLES },
+   {
+@@ -87,7 +88,7 @@ export function homeForRole(role: string): string {
+ }
+ 
+ /** Paths guests can use without signing in (nav + page guards). */
+-export const GUEST_FREE_PREFIXES = ["/learn", "/challenges", "/jobs", "/flashcards"] as const;
++export const GUEST_FREE_PREFIXES = ["/learn", "/challenges", "/jobs", "/flashcards", "/career"] as const;
+ 
+ export function isGuestFreePath(pathname: string): boolean {
+   return GUEST_FREE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+diff --git a/src/server/learning/career-paths.ts b/src/server/learning/career-paths.ts
+new file mode 100644
+index 0000000..78867bf
+--- /dev/null
++++ b/src/server/learning/career-paths.ts
+@@ -0,0 +1,512 @@
++/**
++ * Career paths — pick a job target, then run the courses/practicums that teach
++ * what that role actually needs (in order).
++ */
++
++export type CareerStageKind = "course" | "practicum" | "drill" | "mock" | "jobs";
++
++export type CareerStage = {
++  id: string;
++  kind: CareerStageKind;
++  title: string;
++  teaches: string;
++  href: string;
++  /** Study-plan slug to auto-enroll when the career path is chosen */
++  planSlug?: string;
++  durationLabel: string;
++};
++
++export type CareerPath = {
++  slug: string;
++  title: string;
++  role: string;
++  department: string;
++  blurb: string;
++  outcomes: string[];
++  hiringSignal: string;
++  stages: CareerStage[];
++};
++
++export const CAREER_PATHS: CareerPath[] = [
++  {
++    slug: "backend-swe",
++    title: "Backend Software Engineer",
++    role: "Backend Engineer",
++    department: "Software Engineering",
++    blurb:
++      "Ship services that stay correct under load — APIs, data, queues, and the interview loop that hires for it.",
++    outcomes: [
++      "Live-coding framework employers expect",
++      "Core DSA patterns for OA + onsites",
++      "Backend systems instincts (queues, outbox, perf)",
++      "System design tradeoffs you can defend",
++    ],
++    hiringSignal: "Backend / platform loops at product companies",
++    stages: [
++      {
++        id: "iv-craft",
++        kind: "course",
++        title: "Interview Craft (CRUC-201)",
++        teaches: "How loops work, the coding framework, patterns, design + behavioral rounds.",
++        href: "/learn/interview",
++        planSlug: "interview-craft",
++        durationLabel: "6 weeks · lectures",
++      },
++      {
++        id: "grind",
++        kind: "practicum",
++        title: "Core Grind · 2 Weeks",
++        teaches: "Highest-leverage coding patterns before any company pack.",
++        href: "/study-plans",
++        planSlug: "grind-75-core",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "backend-pack",
++        kind: "practicum",
++        title: "Backend Systems Pack",
++        teaches: "Queues, outbox, webhooks, and perf — what backend loops probe.",
++        href: "/study-plans",
++        planSlug: "backend-systems-pack",
++        durationLabel: "21 days · labs",
++      },
++      {
++        id: "design",
++        kind: "practicum",
++        title: "System Design Sprint",
++        teaches: "Architecture under time — diagrams, tradeoffs, failure modes.",
++        href: "/study-plans",
++        planSlug: "system-design-sprint",
++        durationLabel: "10 days · labs",
++      },
++      {
++        id: "flash",
++        kind: "drill",
++        title: "Flash cards · Backend tags",
++        teaches: "Prompt/pattern/edge drills before you open the IDE.",
++        href: "/flashcards",
++        durationLabel: "Ongoing",
++      },
++      {
++        id: "mock",
++        kind: "mock",
++        title: "Timed company mocks",
++        teaches: "Pressure-test the same skills in a timed round.",
++        href: "/interview",
++        durationLabel: "45–60 min",
++      },
++      {
++        id: "jobs",
++        kind: "jobs",
++        title: "Backend roles board",
++        teaches: "Apply what you practiced to real openings.",
++        href: "/jobs",
++        durationLabel: "When ready",
++      },
++    ],
++  },
++  {
++    slug: "frontend-swe",
++    title: "Frontend Software Engineer",
++    role: "Frontend Engineer",
++    department: "Software Engineering",
++    blurb: "UI craft plus the CS patterns front-end loops still ask — then ship under a clock.",
++    outcomes: [
++      "Interview process fluency",
++      "UI + state craft problems",
++      "Core CS still tested in FE loops",
++      "Timed mock confidence",
++    ],
++    hiringSignal: "Product frontend / full-stack FE-leaning loops",
++    stages: [
++      {
++        id: "iv-craft",
++        kind: "course",
++        title: "Interview Craft (CRUC-201)",
++        teaches: "Clarify → approach → code → test — every live round.",
++        href: "/learn/interview",
++        planSlug: "interview-craft",
++        durationLabel: "6 weeks · lectures",
++      },
++      {
++        id: "fe-pack",
++        kind: "practicum",
++        title: "Frontend Interview",
++        teaches: "UI craft plus the CS patterns FE loops still ask.",
++        href: "/study-plans",
++        planSlug: "frontend-interview",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "grind",
++        kind: "practicum",
++        title: "Core Grind · 2 Weeks",
++        teaches: "Arrays through graphs so OA rounds don’t surprise you.",
++        href: "/study-plans",
++        planSlug: "grind-75-core",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "flash",
++        kind: "drill",
++        title: "Flash cards",
++        teaches: "Drill prompts and edges before coding.",
++        href: "/flashcards",
++        durationLabel: "Ongoing",
++      },
++      {
++        id: "mock",
++        kind: "mock",
++        title: "Timed mocks",
++        teaches: "Practice FE-leaning company rounds under time.",
++        href: "/interview",
++        durationLabel: "45–60 min",
++      },
++      {
++        id: "jobs",
++        kind: "jobs",
++        title: "Frontend roles",
++        teaches: "Match your syllabus to open roles.",
++        href: "/jobs",
++        durationLabel: "When ready",
++      },
++    ],
++  },
++  {
++    slug: "ai-engineer",
++    title: "AI / LLM Engineer",
++    role: "AI Engineer",
++    department: "Applied AI",
++    blurb:
++      "Prompting through production — evals, retrieval, agents, safety — plus enough interview craft to get hired.",
++    outcomes: [
++      "Ship LLM features with judgment",
++      "Evals and failure modes before launch",
++      "Coding interview baseline",
++      "AI-leaning job hunt readiness",
++    ],
++    hiringSignal: "AI platform / applied LLM product roles",
++    stages: [
++      {
++        id: "ai-craft",
++        kind: "course",
++        title: "AI Craft (CRUC-310)",
++        teaches: "Context, prompts, tools, RAG, agents, evals, safety.",
++        href: "/learn/ai",
++        planSlug: "ai-craft",
++        durationLabel: "8 weeks · lectures",
++      },
++      {
++        id: "iv-craft",
++        kind: "course",
++        title: "Interview Craft (CRUC-201)",
++        teaches: "You’ll still face coding + behavioral rounds.",
++        href: "/learn/interview",
++        planSlug: "interview-craft",
++        durationLabel: "6 weeks · lectures",
++      },
++      {
++        id: "grind",
++        kind: "practicum",
++        title: "Core Grind · 2 Weeks",
++        teaches: "Keep the coding floor solid while you deepen AI craft.",
++        href: "/study-plans",
++        planSlug: "grind-75-core",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "flash",
++        kind: "drill",
++        title: "Flash cards",
++        teaches: "Pattern drills for coding + AI concepts.",
++        href: "/flashcards",
++        durationLabel: "Ongoing",
++      },
++      {
++        id: "mock",
++        kind: "mock",
++        title: "Timed mocks",
++        teaches: "Pressure-test coding under interview constraints.",
++        href: "/interview",
++        durationLabel: "45–60 min",
++      },
++      {
++        id: "jobs",
++        kind: "jobs",
++        title: "AI / ML roles",
++        teaches: "Find openings that match this syllabus.",
++        href: "/jobs",
++        durationLabel: "When ready",
++      },
++    ],
++  },
++  {
++    slug: "security-engineer",
++    title: "Security Engineer",
++    role: "Security Engineer",
++    department: "Security",
++    blurb: "AppSec-leaning coding, auth/idempotency instincts, and the interview craft security loops still run.",
++    outcomes: [
++      "Secure coding + validation drills",
++      "Auth / abuse-case thinking",
++      "Interview loop fluency",
++      "Security role applications",
++    ],
++    hiringSignal: "AppSec / product security / security engineering",
++    stages: [
++      {
++        id: "iv-craft",
++        kind: "course",
++        title: "Interview Craft (CRUC-201)",
++        teaches: "Security loops still grade communication and coding process.",
++        href: "/learn/interview",
++        planSlug: "interview-craft",
++        durationLabel: "6 weeks · lectures",
++      },
++      {
++        id: "sec-pack",
++        kind: "practicum",
++        title: "Security Track Sprint",
++        teaches: "Password validation, OAuth BFF, rate limits, AppSec fortress.",
++        href: "/study-plans",
++        planSlug: "security-track-sprint",
++        durationLabel: "10 days · labs",
++      },
++      {
++        id: "backend",
++        kind: "practicum",
++        title: "Backend Systems Pack",
++        teaches: "Abuse cases live in queues, webhooks, and APIs.",
++        href: "/study-plans",
++        planSlug: "backend-systems-pack",
++        durationLabel: "21 days · labs",
++      },
++      {
++        id: "flash",
++        kind: "drill",
++        title: "Flash cards · Security domain",
++        teaches: "Drill requirements and edges before labs.",
++        href: "/flashcards",
++        durationLabel: "Ongoing",
++      },
++      {
++        id: "jobs",
++        kind: "jobs",
++        title: "Security roles",
++        teaches: "Map the syllabus to cybersecurity openings.",
++        href: "/jobs",
++        durationLabel: "When ready",
++      },
++    ],
++  },
++  {
++    slug: "new-grad-swe",
++    title: "New Grad Software Engineer",
++    role: "New Grad SWE",
++    department: "Software Engineering",
++    blurb: "A full ramp from interview foundations through a focused grind — built for first-loop readiness.",
++    outcomes: [
++      "Understand every round type",
++      "Fundamentals → graphs in two weeks",
++      "One design mission under guidance",
++      "Mock + apply with a clear story",
++    ],
++    hiringSignal: "New grad / early-career SWE loops",
++    stages: [
++      {
++        id: "iv-craft",
++        kind: "course",
++        title: "Interview Craft (CRUC-201)",
++        teaches: "The whole loop before you grind problems blind.",
++        href: "/learn/interview",
++        planSlug: "interview-craft",
++        durationLabel: "6 weeks · lectures",
++      },
++      {
++        id: "new-grad",
++        kind: "practicum",
++        title: "New Grad Sprint",
++        teaches: "Fundamentals → graphs → one design mission.",
++        href: "/study-plans",
++        planSlug: "new-grad-sprint",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "grind",
++        kind: "practicum",
++        title: "Core Grind · 2 Weeks",
++        teaches: "Repeat the highest-leverage patterns until they’re automatic.",
++        href: "/study-plans",
++        planSlug: "grind-75-core",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "flash",
++        kind: "drill",
++        title: "Flash cards",
++        teaches: "Daily drills so patterns stick.",
++        href: "/flashcards",
++        durationLabel: "Ongoing",
++      },
++      {
++        id: "mock",
++        kind: "mock",
++        title: "First timed mock",
++        teaches: "Feel a real round before applications.",
++        href: "/interview",
++        durationLabel: "45–60 min",
++      },
++      {
++        id: "jobs",
++        kind: "jobs",
++        title: "New grad openings",
++        teaches: "Apply with a syllabus you can explain.",
++        href: "/jobs",
++        durationLabel: "When ready",
++      },
++    ],
++  },
++  {
++    slug: "fullstack-swe",
++    title: "Full-Stack Software Engineer",
++    role: "Software Engineer",
++    department: "Software Engineering",
++    blurb: "End-to-end product engineer path — interview craft, core grind, frontend + backend packs, then mocks.",
++    outcomes: [
++      "Interview craft end-to-end",
++      "FE + BE practicum coverage",
++      "System design intro",
++      "Company-ready mocks",
++    ],
++    hiringSignal: "Full-stack / product engineer loops",
++    stages: [
++      {
++        id: "iv-craft",
++        kind: "course",
++        title: "Interview Craft (CRUC-201)",
++        teaches: "Shared foundation for every product loop.",
++        href: "/learn/interview",
++        planSlug: "interview-craft",
++        durationLabel: "6 weeks · lectures",
++      },
++      {
++        id: "grind",
++        kind: "practicum",
++        title: "Core Grind · 2 Weeks",
++        teaches: "OA and phone-screen patterns.",
++        href: "/study-plans",
++        planSlug: "grind-75-core",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "fe",
++        kind: "practicum",
++        title: "Frontend Interview",
++        teaches: "UI craft half of the stack.",
++        href: "/study-plans",
++        planSlug: "frontend-interview",
++        durationLabel: "14 days · labs",
++      },
++      {
++        id: "be",
++        kind: "practicum",
++        title: "Backend Systems Pack",
++        teaches: "API, data, and reliability half of the stack.",
++        href: "/study-plans",
++        planSlug: "backend-systems-pack",
++        durationLabel: "21 days · labs",
++      },
++      {
++        id: "design",
++        kind: "practicum",
++        title: "System Design Sprint",
++        teaches: "Talk through a service end-to-end.",
++        href: "/study-plans",
++        planSlug: "system-design-sprint",
++        durationLabel: "10 days · labs",
++      },
++      {
++        id: "mock",
++        kind: "mock",
++        title: "Timed mocks",
++        teaches: "Full-loop rehearsal.",
++        href: "/interview",
++        durationLabel: "45–60 min",
++      },
++      {
++        id: "jobs",
++        kind: "jobs",
++        title: "Full-stack roles",
++        teaches: "Target openings that match this path.",
++        href: "/jobs",
++        durationLabel: "When ready",
++      },
++    ],
++  },
++];
++
++export function getCareerPath(slug: string) {
++  return CAREER_PATHS.find((p) => p.slug === slug) ?? null;
++}
++
++export function planSlugsForCareer(path: CareerPath) {
++  return [...new Set(path.stages.map((s) => s.planSlug).filter(Boolean) as string[])];
++}
++
++export type CareerPathProgress = {
++  path: CareerPath;
++  stageStats: {
++    id: string;
++    done: number;
++    total: number;
++    percent: number;
++    complete: boolean;
++    enrolled: boolean;
++  }[];
++  percent: number;
++  nextStageId: string | null;
++};
++
++export function scoreCareerProgress(
++  path: CareerPath,
++  enrollments: Map<string, { completedSlugs: string[] }>,
++  planTotals: Map<string, number>,
++): CareerPathProgress {
++  const stageStats = path.stages.map((stage) => {
++    if (!stage.planSlug) {
++      return {
++        id: stage.id,
++        done: 0,
++        total: 0,
++        percent: 0,
++        complete: false,
++        enrolled: false,
++      };
++    }
++    const enr = enrollments.get(stage.planSlug);
++    const total = planTotals.get(stage.planSlug) ?? 0;
++    const done = enr?.completedSlugs?.length ?? 0;
++    const complete = total > 0 && done >= total;
++    return {
++      id: stage.id,
++      done,
++      total,
++      percent: total ? Math.round((Math.min(done, total) / total) * 100) : 0,
++      complete,
++      enrolled: Boolean(enr),
++    };
++  });
++
++  const tracked = stageStats.filter((s) => s.total > 0);
++  const percent = tracked.length
++    ? Math.round(tracked.reduce((acc, s) => acc + s.percent, 0) / tracked.length)
++    : 0;
++  const next =
++    path.stages.find((stage) => {
++      const stat = stageStats.find((s) => s.id === stage.id)!;
++      if (!stage.planSlug) return false;
++      return !stat.complete;
++    })?.id ?? path.stages.find((s) => !s.planSlug)?.id ?? null;
++
++  return { path, stageStats, percent, nextStageId: next };
++}
+-- 
+2.43.0
+

@@ -1,0 +1,498 @@
+From 4cccd8964f96ba3be85c38d85b13de8edabc6646 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Mon, 9 Nov 2026 21:41:34 +0000
+Subject: [PATCH] Add cybersecurity focus to Jobs search
+
+Fetch security/cyber keywords alongside SWE boards, classify AppSec/SOC
+titles, and expose All / Engineering / Cybersecurity focus chips.
+---
+ src/app/api/jobs/route.ts           |  14 ++-
+ src/components/jobs/jobs-client.tsx |  41 +++++-
+ src/server/jobs/adapters.ts         |  21 +++-
+ src/server/jobs/catalog.ts          | 187 +++++++++++++++++++++++-----
+ src/server/jobs/decode.ts           |  31 ++++-
+ 5 files changed, 252 insertions(+), 42 deletions(-)
+
+diff --git a/src/app/api/jobs/route.ts b/src/app/api/jobs/route.ts
+index 5761746..6765bd2 100644
+--- a/src/app/api/jobs/route.ts
++++ b/src/app/api/jobs/route.ts
+@@ -2,10 +2,12 @@ import { z } from "zod";
+ import { COMPANIES } from "@/lib/saas";
+ import { jsonOk, withHandler } from "@/server/auth/api";
+ import { flattenJobs, getJobBoard } from "@/server/jobs/catalog";
++import { matchesJobFocus, type JobFocus } from "@/server/jobs/decode";
+ 
+ const Query = z.object({
+   company: z.string().optional(),
+   q: z.string().optional(),
++  focus: z.enum(["all", "engineering", "cybersecurity"]).optional(),
+   refresh: z.enum(["1", "true"]).optional(),
+ });
+ 
+@@ -15,15 +17,20 @@ export async function GET(req: Request) {
+     const parsed = Query.parse({
+       company: url.searchParams.get("company") || undefined,
+       q: url.searchParams.get("q") || undefined,
++      focus: url.searchParams.get("focus") || undefined,
+       refresh: url.searchParams.get("refresh") || undefined,
+     });
+ 
+     const board = await getJobBoard({ force: Boolean(parsed.refresh) });
+     let jobs = flattenJobs(board.results);
++    const focus = (parsed.focus ?? "all") as JobFocus;
+ 
+     if (parsed.company && parsed.company !== "All") {
+       jobs = jobs.filter((j) => j.company === parsed.company);
+     }
++    if (focus !== "all") {
++      jobs = jobs.filter((j) => matchesJobFocus(j.title, focus));
++    }
+     if (parsed.q?.trim()) {
+       const needle = parsed.q.trim().toLowerCase();
+       jobs = jobs.filter(
+@@ -38,7 +45,11 @@ export async function GET(req: Request) {
+     const byCompany = Object.fromEntries(
+       board.results.map((r) => [
+         r.company,
+-        { ok: r.ok, count: r.jobs.length, error: r.error ?? null },
++        {
++          ok: r.ok,
++          count: r.jobs.filter((j) => (focus === "all" ? true : matchesJobFocus(j.title, focus))).length,
++          error: r.error ?? null,
++        },
+       ]),
+     );
+ 
+@@ -47,6 +58,7 @@ export async function GET(req: Request) {
+       total: jobs.length,
+       companies: [...COMPANIES],
+       byCompany,
++      focus,
+       refreshedAt: board.refreshedAt,
+       cached: board.cached,
+     });
+diff --git a/src/components/jobs/jobs-client.tsx b/src/components/jobs/jobs-client.tsx
+index 56ee21e..73436f6 100644
+--- a/src/components/jobs/jobs-client.tsx
++++ b/src/components/jobs/jobs-client.tsx
+@@ -23,8 +23,17 @@ const SOURCE_LABEL: Record<JobSource, string> = {
+   linkedin: "LinkedIn listing",
+ };
+ 
++type JobFocus = "all" | "engineering" | "cybersecurity";
++
++const FOCUS_OPTIONS: { id: JobFocus; label: string }[] = [
++  { id: "all", label: "All tech" },
++  { id: "engineering", label: "Engineering" },
++  { id: "cybersecurity", label: "Cybersecurity" },
++];
++
+ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+   const [company, setCompany] = useState<string>("All");
++  const [focus, setFocus] = useState<JobFocus>("all");
+   const [q, setQ] = useState("");
+   const [jobs, setJobs] = useState<JobPosting[]>([]);
+   const [byCompany, setByCompany] = useState<Record<string, BoardMeta>>({});
+@@ -38,6 +47,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+     try {
+       const params = new URLSearchParams();
+       if (company !== "All") params.set("company", company);
++      if (focus !== "all") params.set("focus", focus);
+       if (q.trim()) params.set("q", q.trim());
+       if (refresh) params.set("refresh", "1");
+       const res = await fetch(`/api/jobs?${params.toString()}`);
+@@ -53,7 +63,7 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+     } finally {
+       setLoading(false);
+     }
+-  }, [company, q]);
++  }, [company, focus, q]);
+ 
+   useEffect(() => {
+     void load(false);
+@@ -75,8 +85,8 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+           Official openings from company career boards
+         </h1>
+         <p className="mt-2 max-w-2xl text-slate-600">
+-          Aggregated public postings (Greenhouse and company career sites) — not Crucible-hosted applications.
+-          Apply on the employer&apos;s page; prep here with a matching mock.
++          Aggregated public postings for software engineering and cybersecurity (Greenhouse and company career
++          sites) — not Crucible-hosted applications. Apply on the employer&apos;s page; prep here with a matching mock.
+         </p>
+         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+           <Briefcase className="h-3.5 w-3.5" />
+@@ -90,6 +100,25 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+       </header>
+ 
+       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4 sm:p-5">
++        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Focus</p>
++        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
++          {FOCUS_OPTIONS.map((opt) => (
++            <button
++              key={opt.id}
++              type="button"
++              onClick={() => setFocus(opt.id)}
++              className={cn(
++                "shrink-0 rounded-md border px-3 py-2 text-xs transition",
++                focus === opt.id
++                  ? "border-[var(--brand)] bg-[var(--brand-soft)] text-slate-900"
++                  : "border-slate-200 text-slate-600 hover:bg-slate-50",
++              )}
++            >
++              {opt.label}
++            </button>
++          ))}
++        </div>
++
+         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">Company</p>
+         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+           <button
+@@ -128,7 +157,11 @@ export function JobsClient(props: { companies: readonly JobCompany[] }) {
+           <Input
+             value={q}
+             onChange={(e) => setQ(e.target.value)}
+-            placeholder="Filter title, location, team…"
++            placeholder={
++              focus === "cybersecurity"
++                ? "Filter AppSec, SOC, cloud security…"
++                : "Filter title, location, team…"
++            }
+             className="sm:flex-1"
+             onKeyDown={(e) => {
+               if (e.key === "Enter") void load(false);
+diff --git a/src/server/jobs/adapters.ts b/src/server/jobs/adapters.ts
+index d7169be..1cfe63a 100644
+--- a/src/server/jobs/adapters.ts
++++ b/src/server/jobs/adapters.ts
+@@ -1,6 +1,20 @@
+ import type { JobCompany, JobPosting, JobSource } from "./types";
+ import { decodeHtml, looksLikeEngRole, titleFromSlug } from "./decode";
+ 
++/** Merge board pages / keyword searches and keep first occurrence per id. */
++export function mergeJobLists(...lists: JobPosting[][]): JobPosting[] {
++  const seen = new Set<string>();
++  const out: JobPosting[] = [];
++  for (const list of lists) {
++    for (const job of list) {
++      if (seen.has(job.id)) continue;
++      seen.add(job.id);
++      out.push(job);
++    }
++  }
++  return out;
++}
++
+ const UA =
+   "Mozilla/5.0 (compatible; CrucibleJobs/1.0; +https://crucible.dev; research; respectful)";
+ 
+@@ -125,7 +139,12 @@ export async function fetchApple(query = "software engineer"): Promise<JobPostin
+     if (seen.has(id)) continue;
+     seen.add(id);
+     const title = titleFromSlug(slug);
+-    if (!looksLikeEngRole(title) && !/engineer|developer|software|siri|ml|ai/i.test(slug)) continue;
++    if (
++      !looksLikeEngRole(title) &&
++      !/engineer|developer|software|siri|ml|ai|security|cyber|infosec|appsec/i.test(slug)
++    ) {
++      continue;
++    }
+     jobs.push(
+       post("Apple", "apple", {
+         id: `apple-${id}`,
+diff --git a/src/server/jobs/catalog.ts b/src/server/jobs/catalog.ts
+index ab93347..dd31034 100644
+--- a/src/server/jobs/catalog.ts
++++ b/src/server/jobs/catalog.ts
+@@ -7,6 +7,7 @@ import {
+   fetchLinkedInCompany,
+   fetchNetflix,
+   fetchShopify,
++  mergeJobLists,
+ } from "./adapters";
+ import type { JobBoardResult, JobCompany, JobPosting, JobSource } from "./types";
+ 
+@@ -68,14 +69,69 @@ const CAREERS_SEARCH: Record<JobCompany, { url: string; source: JobSource }> = {
+   },
+ };
+ 
+-function browseFallback(company: JobCompany): JobPosting {
+-  const dest = CAREERS_SEARCH[company];
++/** Cybersecurity browse links when a live feed is empty or blocked. */
++const CAREERS_SEARCH_CYBER: Record<JobCompany, { url: string; source: JobSource }> = {
++  Google: {
++    url: "https://www.google.com/about/careers/applications/jobs/results/?q=Security%20Engineer",
++    source: "google",
++  },
++  Meta: {
++    url: "https://www.metacareers.com/jobs/?q=security%20engineer",
++    source: "linkedin",
++  },
++  Amazon: {
++    url: "https://www.amazon.jobs/en/search?base_query=security%20engineer",
++    source: "amazon",
++  },
++  Apple: {
++    url: "https://jobs.apple.com/en-us/search?search=security%20engineer&sort=relevance",
++    source: "apple",
++  },
++  Microsoft: {
++    url: "https://jobs.careers.microsoft.com/global/en/search?q=cybersecurity",
++    source: "linkedin",
++  },
++  Stripe: {
++    url: "https://stripe.com/jobs/search?q=security",
++    source: "greenhouse",
++  },
++  Netflix: {
++    url: "https://explore.jobs.netflix.net/careers?query=security%20engineer",
++    source: "netflix",
++  },
++  Uber: {
++    url: "https://www.uber.com/us/en/careers/list/?query=security%20engineer",
++    source: "linkedin",
++  },
++  Cloudflare: {
++    url: "https://www.cloudflare.com/careers/jobs/?department=Engineering",
++    source: "greenhouse",
++  },
++  Bloomberg: {
++    url: "https://careers.bloomberg.com/job/search?q=security%20engineer",
++    source: "linkedin",
++  },
++  LinkedIn: {
++    url: "https://www.linkedin.com/jobs/search/?keywords=cybersecurity%20LinkedIn",
++    source: "linkedin",
++  },
++  Shopify: {
++    url: "https://www.shopify.com/careers/search?q=security",
++    source: "shopify",
++  },
++};
++
++function browseFallback(company: JobCompany, focus: "engineering" | "cybersecurity" = "engineering"): JobPosting {
++  const dest = focus === "cybersecurity" ? CAREERS_SEARCH_CYBER[company] : CAREERS_SEARCH[company];
+   return {
+-    id: `browse-${company}`,
++    id: `browse-${focus}-${company}`,
+     company,
+-    title: `Browse ${company} engineering roles`,
++    title:
++      focus === "cybersecurity"
++        ? `Browse ${company} cybersecurity roles`
++        : `Browse ${company} engineering roles`,
+     location: "Official careers site",
+-    team: "Open search",
++    team: focus === "cybersecurity" ? "Security search" : "Open search",
+     url: dest.url,
+     source: dest.source,
+   };
+@@ -87,52 +143,119 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+     let jobs: JobPosting[] = [];
+     switch (company) {
+       case "Google":
+-        jobs = await fetchGoogle();
++        jobs = mergeJobLists(
++          await fetchGoogle("Software Engineer"),
++          await fetchGoogle("Security Engineer"),
++          await fetchGoogle("Cybersecurity"),
++        );
+         break;
+       case "Amazon":
+-        jobs = await fetchAmazon();
++        jobs = mergeJobLists(
++          await fetchAmazon("software engineer"),
++          await fetchAmazon("security engineer"),
++          await fetchAmazon("cybersecurity"),
++        );
+         break;
+       case "Meta":
+-        jobs = await fetchLinkedInCompany("Meta", {
+-          companyId: 10667,
+-          keywords: "software engineer",
+-        });
++        jobs = mergeJobLists(
++          await fetchLinkedInCompany("Meta", {
++            companyId: 10667,
++            keywords: "software engineer",
++          }),
++          await fetchLinkedInCompany("Meta", {
++            companyId: 10667,
++            keywords: "security engineer",
++          }),
++          await fetchLinkedInCompany("Meta", {
++            companyId: 10667,
++            keywords: "cybersecurity",
++          }),
++        );
+         break;
+       case "Apple":
+-        jobs = await fetchApple();
++        jobs = mergeJobLists(
++          await fetchApple("software engineer"),
++          await fetchApple("security engineer"),
++          await fetchApple("cybersecurity"),
++        );
+         break;
+       case "Microsoft":
+-        jobs = await fetchLinkedInCompany("Microsoft", {
+-          companyId: 1035,
+-          keywords: "software engineer",
+-        });
++        jobs = mergeJobLists(
++          await fetchLinkedInCompany("Microsoft", {
++            companyId: 1035,
++            keywords: "software engineer",
++          }),
++          await fetchLinkedInCompany("Microsoft", {
++            companyId: 1035,
++            keywords: "security engineer",
++          }),
++          await fetchLinkedInCompany("Microsoft", {
++            companyId: 1035,
++            keywords: "cybersecurity",
++          }),
++        );
+         break;
+       case "Stripe":
++        // Greenhouse board already includes security titles once looksLikeEngRole expands.
+         jobs = await fetchGreenhouse("Stripe", "stripe");
+         break;
+       case "Netflix":
+-        jobs = await fetchNetflix();
++        jobs = mergeJobLists(
++          await fetchNetflix("software engineer"),
++          await fetchNetflix("security engineer"),
++          await fetchNetflix("cybersecurity"),
++        );
+         break;
+       case "Uber":
+-        jobs = await fetchLinkedInCompany("Uber", {
+-          keywords: 'Uber "Software Engineer"',
+-          requireCompanyName: "Uber",
+-        });
++        jobs = mergeJobLists(
++          await fetchLinkedInCompany("Uber", {
++            keywords: 'Uber "Software Engineer"',
++            requireCompanyName: "Uber",
++          }),
++          await fetchLinkedInCompany("Uber", {
++            keywords: 'Uber "Security Engineer"',
++            requireCompanyName: "Uber",
++          }),
++          await fetchLinkedInCompany("Uber", {
++            keywords: "Uber cybersecurity",
++            requireCompanyName: "Uber",
++          }),
++        );
+         break;
+       case "Cloudflare":
+         jobs = await fetchGreenhouse("Cloudflare", "cloudflare");
+         break;
+       case "Bloomberg":
+-        jobs = await fetchLinkedInCompany("Bloomberg", {
+-          keywords: 'Bloomberg "Software Engineer"',
+-          requireCompanyName: "Bloomberg",
+-        });
++        jobs = mergeJobLists(
++          await fetchLinkedInCompany("Bloomberg", {
++            keywords: 'Bloomberg "Software Engineer"',
++            requireCompanyName: "Bloomberg",
++          }),
++          await fetchLinkedInCompany("Bloomberg", {
++            keywords: 'Bloomberg "Security Engineer"',
++            requireCompanyName: "Bloomberg",
++          }),
++          await fetchLinkedInCompany("Bloomberg", {
++            keywords: "Bloomberg cybersecurity",
++            requireCompanyName: "Bloomberg",
++          }),
++        );
+         break;
+       case "LinkedIn":
+-        jobs = await fetchLinkedInCompany("LinkedIn", {
+-          companyId: 1337,
+-          keywords: "software engineer",
+-        });
++        jobs = mergeJobLists(
++          await fetchLinkedInCompany("LinkedIn", {
++            companyId: 1337,
++            keywords: "software engineer",
++          }),
++          await fetchLinkedInCompany("LinkedIn", {
++            companyId: 1337,
++            keywords: "security engineer",
++          }),
++          await fetchLinkedInCompany("LinkedIn", {
++            companyId: 1337,
++            keywords: "cybersecurity",
++          }),
++        );
+         break;
+       case "Shopify":
+         jobs = await fetchShopify();
+@@ -140,13 +263,15 @@ async function loadCompany(company: JobCompany): Promise<JobBoardResult> {
+       default:
+         jobs = [];
+     }
+-    if (!jobs.length) jobs = [browseFallback(company)];
++    if (!jobs.length) {
++      jobs = [browseFallback(company, "engineering"), browseFallback(company, "cybersecurity")];
++    }
+     return { company, ok: true, jobs, fetchedAt };
+   } catch (e) {
+     return {
+       company,
+       ok: false,
+-      jobs: [browseFallback(company)],
++      jobs: [browseFallback(company, "engineering"), browseFallback(company, "cybersecurity")],
+       error: e instanceof Error ? e.message.slice(0, 160) : "Fetch failed",
+       fetchedAt,
+     };
+diff --git a/src/server/jobs/decode.ts b/src/server/jobs/decode.ts
+index ee800d7..7213085 100644
+--- a/src/server/jobs/decode.ts
++++ b/src/server/jobs/decode.ts
+@@ -22,13 +22,34 @@ export function titleFromSlug(slug: string): string {
+   );
+ }
+ 
+-/** Prefer software / eng roles for the default Jobs browse. */
++const NON_TECH =
++  /\b(account executive|sales|recruiter|counsel|attorney|barista|cashier|driver|marketing manager|brand manager)\b/i;
++
++/** Cybersecurity / infosec / AppSec / SOC style roles. */
++export function looksLikeCyberRole(title: string): boolean {
++  const t = title.toLowerCase();
++  if (NON_TECH.test(t)) return false;
++  return /\b(cyber\s*security|cybersecurity|information security|infosec|appsec|product security|application security|security engineer|security analyst|security architect|security researcher|security consultant|penetration|pen\s*test|red team|blue team|purple team|threat intel|threat intelligence|threat detection|detection engineer|soc analyst|soc engineer|incident response|malware|vulnerability|offensive security|defensive security|cloud security|network security|identity security|zero[\s-]?trust|cryptograph|ciso|grc|devsecops|secure coding)\b/i.test(
++    t,
++  );
++}
++
++/** Prefer software / eng / security roles for the default Jobs browse. */
+ export function looksLikeEngRole(title: string): boolean {
+   const t = title.toLowerCase();
+-  if (/\b(account executive|sales|recruiter|counsel|attorney|barista|cashier|driver)\b/.test(t)) {
+-    return false;
+-  }
+-  return /\b(software|engineer|engineering|developer|swe|sre|devops|security engineer|machine learning|ml engineer|applied ml|data engineer|full.?stack|backend|front.??end|ios|android|infrastructure|platform|reliability|genai|ai agent)\b/i.test(
++  if (NON_TECH.test(t)) return false;
++  if (looksLikeCyberRole(t)) return true;
++  return /\b(software|engineer|engineering|developer|swe|sre|devops|machine learning|ml engineer|applied ml|data engineer|full.?stack|backend|front.??end|ios|android|infrastructure|platform|reliability|genai|ai agent)\b/i.test(
+     t,
+   );
+ }
++
++export type JobFocus = "all" | "engineering" | "cybersecurity";
++
++/** Filter postings by Jobs focus chip. */
++export function matchesJobFocus(title: string, focus: JobFocus): boolean {
++  if (focus === "all") return looksLikeEngRole(title);
++  if (focus === "cybersecurity") return looksLikeCyberRole(title);
++  // Engineering: tech roles that are not primarily cyber-titled.
++  return looksLikeEngRole(title) && !looksLikeCyberRole(title);
++}
+-- 
+2.43.0
+
