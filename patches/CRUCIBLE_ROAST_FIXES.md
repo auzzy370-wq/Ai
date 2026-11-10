@@ -72,3 +72,10 @@ Apply `crucible-pro-accessible.patch`: $15/mo · $99/yr, no sprint; Prep nav; au
 ## Flash cards (2026-11-10)
 Apply `crucible-flashcards.patch`: free decks per published challenge + lesson fallbacks; /flashcards hub; guest access; nav + practice wiring.
 
+## Judge online (2026-11-10)
+Apply `crucible-judge-online.patch`:
+- Vercel leaves jobs `QUEUED` (no local `processJob` without Docker)
+- Execute API fail-closed when `JUDGE_ONLINE!==true`
+- Worker regenerates ephemeral harnesses; absolute bind mounts; Node 22 Alpine for TS strip-types
+- Ops: set Vercel `JUDGE_ONLINE=true` and run `npm run dev:worker` with production `DATABASE_URL` + Docker
+
