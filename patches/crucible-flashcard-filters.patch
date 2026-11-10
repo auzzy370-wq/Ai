@@ -1,0 +1,617 @@
+From d42b12ec3ee6cb20d685440e461ad5d1acd6fd0e Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:45:00 +0000
+Subject: [PATCH] Add richer flash card hub and deck filters
+
+Filter decks by difficulty, domain, pattern, and company with sort
+options; inside a deck filter by card kind and hide known cards.
+---
+ src/app/(app)/flashcards/page.tsx          |   4 +
+ src/components/learn/flashcards-client.tsx | 462 +++++++++++++++++----
+ 2 files changed, 384 insertions(+), 82 deletions(-)
+
+diff --git a/src/app/(app)/flashcards/page.tsx b/src/app/(app)/flashcards/page.tsx
+index 778117f..7a2663a 100644
+--- a/src/app/(app)/flashcards/page.tsx
++++ b/src/app/(app)/flashcards/page.tsx
+@@ -28,6 +28,7 @@ export default async function FlashcardsHubPage() {
+       difficulty: true,
+       tags: true,
+       companies: true,
++      type: true,
+       publicRequirements: true,
+       hiddenRequirements: true,
+       hints: true,
+@@ -45,6 +46,9 @@ export default async function FlashcardsHubPage() {
+     summary: c.summary,
+     difficulty: c.difficulty,
+     tags: c.tags,
++    companies: c.companies,
++    type: c.type,
++    frequency: c.frequency ?? 0,
+     cardCount: buildChallengeFlashCards(c).length,
+   }));
+ 
+diff --git a/src/components/learn/flashcards-client.tsx b/src/components/learn/flashcards-client.tsx
+index cbf9059..11681e4 100644
+--- a/src/components/learn/flashcards-client.tsx
++++ b/src/components/learn/flashcards-client.tsx
+@@ -1,7 +1,7 @@
+ "use client";
+ 
+ import Link from "next/link";
+-import { useCallback, useEffect, useMemo, useState } from "react";
++import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+ import { cn } from "@/lib/utils";
+@@ -16,10 +16,78 @@ const KIND_LABEL: Record<FlashCard["kind"], string> = {
+   followup: "Follow-up",
+ };
+ 
++const KIND_ORDER: FlashCard["kind"][] = [
++  "prompt",
++  "pattern",
++  "edge",
++  "requirement",
++  "company",
++  "followup",
++];
++
++const NOISE_TAGS = new Set([
++  "expanded-library",
++  "easy",
++  "medium",
++  "hard",
++  "expert",
++  "impossible",
++  "coding",
++]);
++
++type DiffBand = "all" | "easy" | "medium" | "hard";
++type SortKey = "popular" | "title" | "difficulty-asc" | "difficulty-desc" | "cards";
++
+ function storageKey(slug: string) {
+   return `crucible_flash_${slug}`;
+ }
+ 
++function diffBand(d: number): Exclude<DiffBand, "all"> {
++  if (d <= 3) return "easy";
++  if (d <= 6) return "medium";
++  return "hard";
++}
++
++function diffLabel(d: number) {
++  const band = diffBand(d);
++  return band === "easy" ? "Easy" : band === "medium" ? "Medium" : "Hard";
++}
++
++function domainLabel(type: string) {
++  if (type === "CODING_PROBLEM") return "Coding";
++  if (type.includes("SECURITY") || type === "APPSEC" || type === "SOC_IR" || type === "CRYPTOGRAPHY" || type === "ZERO_TRUST" || type === "THREAT_MODELING" || type === "DETECTION_ENGINEERING" || type === "IDENTITY_ACCESS" || type === "VULN_TRIAGE" || type === "SECURE_CODE_REVIEW" || type === "CLOUD_SECURITY") {
++    return "Security";
++  }
++  if (type === "FRONTEND") return "Frontend";
++  if (type === "BACKEND" || type === "DATABASE" || type === "PERFORMANCE") return "Backend";
++  if (type.includes("DISTRIBUTED") || type === "INFRASTRUCTURE" || type === "REALTIME_COMMS") return "Systems";
++  if (type.includes("AI")) return "AI";
++  return "Mission";
++}
++
++function Chip(props: {
++  active: boolean;
++  onClick: () => void;
++  children: ReactNode;
++  title?: string;
++}) {
++  return (
++    <button
++      type="button"
++      title={props.title}
++      onClick={props.onClick}
++      className={cn(
++        "rounded-md border px-2.5 py-1 text-xs transition",
++        props.active
++          ? "border-orange-400/60 bg-orange-500/10 text-orange-950"
++          : "border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900",
++      )}
++    >
++      {props.children}
++    </button>
++  );
++}
++
+ export function FlashcardsClient(props: {
+   slug: string;
+   title: string;
+@@ -30,6 +98,8 @@ export function FlashcardsClient(props: {
+   const [index, setIndex] = useState(0);
+   const [flipped, setFlipped] = useState(false);
+   const [known, setKnown] = useState<Set<string>>(() => new Set());
++  const [kindFilter, setKindFilter] = useState<"all" | FlashCard["kind"]>("all");
++  const [hideKnown, setHideKnown] = useState(false);
+ 
+   useEffect(() => {
+     try {
+@@ -50,28 +120,40 @@ export function FlashcardsClient(props: {
+     }
+   }, [known, props.slug]);
+ 
+-  const card = props.cards[index] ?? null;
+-  const progress = props.cards.length
+-    ? Math.round((known.size / props.cards.length) * 100)
+-    : 0;
++  const visible = useMemo(() => {
++    return props.cards
++      .map((c, i) => ({ c, i }))
++      .filter(({ c }) => (kindFilter === "all" ? true : c.kind === kindFilter))
++      .filter(({ c }) => (hideKnown ? !known.has(c.id) : true));
++  }, [props.cards, kindFilter, hideKnown, known]);
+ 
+-  const remaining = useMemo(
+-    () => props.cards.map((c, i) => ({ c, i })).filter(({ c }) => !known.has(c.id)),
+-    [known, props.cards],
+-  );
++  useEffect(() => {
++    setIndex(0);
++    setFlipped(false);
++  }, [kindFilter, hideKnown, props.slug]);
++
++  const active = visible[Math.min(index, Math.max(0, visible.length - 1))] ?? null;
++  const card = active?.c ?? null;
++  const progress = props.cards.length ? Math.round((known.size / props.cards.length) * 100) : 0;
++
++  const kindCounts = useMemo(() => {
++    const m = new Map<FlashCard["kind"], number>();
++    for (const c of props.cards) m.set(c.kind, (m.get(c.kind) ?? 0) + 1);
++    return m;
++  }, [props.cards]);
+ 
+   const go = useCallback(
+     (next: number) => {
+-      if (!props.cards.length) return;
+-      const n = ((next % props.cards.length) + props.cards.length) % props.cards.length;
++      if (!visible.length) return;
++      const n = ((next % visible.length) + visible.length) % visible.length;
+       setIndex(n);
+       setFlipped(false);
+     },
+-    [props.cards.length],
++    [visible.length],
+   );
+ 
+   function markKnown(yes: boolean) {
+-    if (!card) return;
++    if (!card || !active) return;
+     setKnown((prev) => {
+       const next = new Set(prev);
+       if (yes) next.add(card.id);
+@@ -79,9 +161,13 @@ export function FlashcardsClient(props: {
+       return next;
+     });
+     if (yes) {
+-      const nextRemaining = remaining.filter(({ c }) => c.id !== card.id);
+-      if (nextRemaining[0]) {
+-        setIndex(nextRemaining[0].i);
++      const nextRemaining = visible.filter(({ c }) => c.id !== card.id && !known.has(c.id));
++      if (hideKnown) {
++        // index stays; list shrinks after state update — clamp on next render
++        setFlipped(false);
++      } else if (nextRemaining[0]) {
++        const nextIdx = visible.findIndex(({ c }) => c.id === nextRemaining[0]!.c.id);
++        setIndex(nextIdx >= 0 ? nextIdx : Math.min(index + 1, visible.length - 1));
+         setFlipped(false);
+       } else {
+         go(index + 1);
+@@ -91,7 +177,7 @@ export function FlashcardsClient(props: {
+     }
+   }
+ 
+-  if (!card) {
++  if (!props.cards.length) {
+     return (
+       <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-16 text-center text-sm text-slate-500">
+         No flash cards for this deck yet.
+@@ -107,10 +193,14 @@ export function FlashcardsClient(props: {
+         {props.summary ? <p className="max-w-2xl text-slate-600">{props.summary}</p> : null}
+         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+           <span>
+-            Card {index + 1}/{props.cards.length}
++            {visible.length
++              ? `Showing ${Math.min(index + 1, visible.length)}/${visible.length}`
++              : "No cards in this filter"}
+           </span>
+           <span>·</span>
+-          <span>{known.size} marked known · {progress}%</span>
++          <span>
++            {known.size} marked known · {progress}%
++          </span>
+           {props.challengeHref ? (
+             <>
+               <span>·</span>
+@@ -125,43 +215,68 @@ export function FlashcardsClient(props: {
+         </div>
+       </header>
+ 
+-      <button
+-        type="button"
+-        onClick={() => setFlipped((f) => !f)}
+-        className={cn(
+-          "min-h-[240px] w-full rounded-2xl border p-6 text-left transition sm:min-h-[280px]",
+-          flipped
+-            ? "border-emerald-300/60 bg-emerald-50/80"
+-            : "border-orange-300/50 bg-[var(--surface-elevated)] hover:border-orange-400/70",
+-        )}
+-      >
+-        <div className="flex items-center justify-between gap-2">
+-          <Badge variant={flipped ? "emerald" : "brand"}>{KIND_LABEL[card.kind]}</Badge>
+-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+-            {flipped ? "Answer" : "Tap to flip"}
+-          </span>
+-        </div>
+-        <p className="mt-6 whitespace-pre-wrap text-lg leading-relaxed text-slate-900 sm:text-xl">
+-          {flipped ? card.back : card.front}
+-        </p>
+-      </button>
+-
+-      <div className="flex flex-wrap gap-2">
+-        <Button variant="secondary" onClick={() => go(index - 1)}>
+-          Previous
+-        </Button>
+-        <Button variant="secondary" onClick={() => setFlipped((f) => !f)}>
+-          {flipped ? "Show prompt" : "Show answer"}
+-        </Button>
+-        <Button variant="outline" onClick={() => markKnown(false)}>
+-          Again
+-        </Button>
+-        <Button onClick={() => markKnown(true)}>Know it</Button>
+-        <Button variant="secondary" onClick={() => go(index + 1)}>
+-          Next
+-        </Button>
++      <div className="flex flex-wrap gap-1.5">
++        <Chip active={kindFilter === "all"} onClick={() => setKindFilter("all")}>
++          All kinds ({props.cards.length})
++        </Chip>
++        {KIND_ORDER.filter((k) => kindCounts.has(k)).map((k) => (
++          <Chip key={k} active={kindFilter === k} onClick={() => setKindFilter(k)}>
++            {KIND_LABEL[k]} ({kindCounts.get(k)})
++          </Chip>
++        ))}
++        <Chip active={hideKnown} onClick={() => setHideKnown((v) => !v)}>
++          {hideKnown ? "Showing unknown only" : "Hide known"}
++        </Chip>
+       </div>
+ 
++      {!card ? (
++        <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-16 text-center text-sm text-slate-500">
++          No cards match these filters.{" "}
++          <button type="button" className="text-orange-800 underline" onClick={() => { setKindFilter("all"); setHideKnown(false); }}>
++            Clear filters
++          </button>
++        </div>
++      ) : (
++        <>
++          <button
++            type="button"
++            onClick={() => setFlipped((f) => !f)}
++            className={cn(
++              "min-h-[240px] w-full rounded-2xl border p-6 text-left transition sm:min-h-[280px]",
++              flipped
++                ? "border-emerald-300/60 bg-emerald-50/80"
++                : "border-orange-300/50 bg-[var(--surface-elevated)] hover:border-orange-400/70",
++            )}
++          >
++            <div className="flex items-center justify-between gap-2">
++              <Badge variant={flipped ? "emerald" : "brand"}>{KIND_LABEL[card.kind]}</Badge>
++              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
++                {flipped ? "Answer" : "Tap to flip"}
++              </span>
++            </div>
++            <p className="mt-6 whitespace-pre-wrap text-lg leading-relaxed text-slate-900 sm:text-xl">
++              {flipped ? card.back : card.front}
++            </p>
++          </button>
++
++          <div className="flex flex-wrap gap-2">
++            <Button variant="secondary" onClick={() => go(index - 1)}>
++              Previous
++            </Button>
++            <Button variant="secondary" onClick={() => setFlipped((f) => !f)}>
++              {flipped ? "Show prompt" : "Show answer"}
++            </Button>
++            <Button variant="outline" onClick={() => markKnown(false)}>
++              Again
++            </Button>
++            <Button onClick={() => markKnown(true)}>Know it</Button>
++            <Button variant="secondary" onClick={() => go(index + 1)}>
++              Next
++            </Button>
++          </div>
++        </>
++      )}
++
+       {known.size >= props.cards.length && (
+         <div className="rounded-xl border border-emerald-300/50 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950">
+           Deck clear.{" "}
+@@ -180,24 +295,93 @@ export function FlashcardsClient(props: {
+   );
+ }
+ 
+-export function FlashcardsHubClient(props: {
+-  decks: {
+-    slug: string;
+-    title: string;
+-    summary: string;
+-    difficulty: number;
+-    tags: string[];
+-    cardCount: number;
+-  }[];
+-}) {
++export type FlashDeckRow = {
++  slug: string;
++  title: string;
++  summary: string;
++  difficulty: number;
++  tags: string[];
++  companies: string[];
++  type: string;
++  frequency: number;
++  cardCount: number;
++};
++
++export function FlashcardsHubClient(props: { decks: FlashDeckRow[] }) {
+   const [q, setQ] = useState("");
++  const [diff, setDiff] = useState<DiffBand>("all");
++  const [domain, setDomain] = useState<"all" | string>("all");
++  const [tag, setTag] = useState<"all" | string>("all");
++  const [company, setCompany] = useState<"all" | string>("all");
++  const [sort, setSort] = useState<SortKey>("popular");
++
++  const domains = useMemo(() => {
++    const m = new Map<string, number>();
++    for (const d of props.decks) {
++      const label = domainLabel(d.type);
++      m.set(label, (m.get(label) ?? 0) + 1);
++    }
++    return [...m.entries()].sort((a, b) => b[1] - a[1]);
++  }, [props.decks]);
++
++  const tags = useMemo(() => {
++    const m = new Map<string, number>();
++    for (const d of props.decks) {
++      for (const t of d.tags) {
++        const key = t.toLowerCase();
++        if (NOISE_TAGS.has(key)) continue;
++        m.set(key, (m.get(key) ?? 0) + 1);
++      }
++    }
++    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 24);
++  }, [props.decks]);
++
++  const companies = useMemo(() => {
++    const m = new Map<string, number>();
++    for (const d of props.decks) {
++      for (const c of d.companies) m.set(c, (m.get(c) ?? 0) + 1);
++    }
++    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 20);
++  }, [props.decks]);
++
+   const filtered = useMemo(() => {
+     const needle = q.trim().toLowerCase();
+-    if (!needle) return props.decks;
+-    return props.decks.filter((d) =>
+-      `${d.title} ${d.summary} ${d.tags.join(" ")} ${d.slug}`.toLowerCase().includes(needle),
+-    );
+-  }, [props.decks, q]);
++    let rows = props.decks.filter((d) => {
++      if (diff !== "all" && diffBand(d.difficulty) !== diff) return false;
++      if (domain !== "all" && domainLabel(d.type) !== domain) return false;
++      if (tag !== "all" && !d.tags.map((t) => t.toLowerCase()).includes(tag)) return false;
++      if (company !== "all" && !d.companies.includes(company)) return false;
++      if (!needle) return true;
++      return `${d.title} ${d.summary} ${d.tags.join(" ")} ${d.companies.join(" ")} ${d.slug} ${domainLabel(d.type)}`
++        .toLowerCase()
++        .includes(needle);
++    });
++
++    rows = [...rows].sort((a, b) => {
++      if (sort === "title") return a.title.localeCompare(b.title);
++      if (sort === "difficulty-asc") return a.difficulty - b.difficulty || a.title.localeCompare(b.title);
++      if (sort === "difficulty-desc") return b.difficulty - a.difficulty || a.title.localeCompare(b.title);
++      if (sort === "cards") return b.cardCount - a.cardCount || a.title.localeCompare(b.title);
++      // popular
++      return b.frequency - a.frequency || a.title.localeCompare(b.title);
++    });
++    return rows;
++  }, [props.decks, q, diff, domain, tag, company, sort]);
++
++  const activeFilters =
++    (diff !== "all" ? 1 : 0) +
++    (domain !== "all" ? 1 : 0) +
++    (tag !== "all" ? 1 : 0) +
++    (company !== "all" ? 1 : 0) +
++    (q.trim() ? 1 : 0);
++
++  function clearFilters() {
++    setQ("");
++    setDiff("all");
++    setDomain("all");
++    setTag("all");
++    setCompany("all");
++  }
+ 
+   return (
+     <div className="animate-rise space-y-6">
+@@ -207,17 +391,110 @@ export function FlashcardsHubClient(props: {
+           Drill every problem before you code
+         </h1>
+         <p className="max-w-2xl text-slate-600">
+-          Each published challenge gets a free deck — prompt, patterns, edges, and company cues. Progress saves in this
+-          browser.
++          Filter by difficulty, domain, pattern, or company — then open a deck. Progress saves in this browser.
+         </p>
+       </header>
+ 
+-      <input
+-        value={q}
+-        onChange={(e) => setQ(e.target.value)}
+-        placeholder="Filter by title, tag, company pattern…"
+-        className="flex h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+-      />
++      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white/80 p-4">
++        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
++          <input
++            value={q}
++            onChange={(e) => setQ(e.target.value)}
++            placeholder="Search title, tag, company…"
++            className="flex h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
++          />
++          <label className="flex shrink-0 items-center gap-2 text-sm text-slate-600">
++            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Sort</span>
++            <select
++              value={sort}
++              onChange={(e) => setSort(e.target.value as SortKey)}
++              className="h-11 rounded-md border border-slate-300 bg-white px-2 text-sm"
++            >
++              <option value="popular">Most drilled</option>
++              <option value="title">Title A–Z</option>
++              <option value="difficulty-asc">Easiest first</option>
++              <option value="difficulty-desc">Hardest first</option>
++              <option value="cards">Most cards</option>
++            </select>
++          </label>
++        </div>
++
++        <div className="space-y-2">
++          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Difficulty</p>
++          <div className="flex flex-wrap gap-1.5">
++            {(
++              [
++                ["all", "All"],
++                ["easy", "Easy"],
++                ["medium", "Medium"],
++                ["hard", "Hard"],
++              ] as const
++            ).map(([id, label]) => (
++              <Chip key={id} active={diff === id} onClick={() => setDiff(id)}>
++                {label}
++              </Chip>
++            ))}
++          </div>
++        </div>
++
++        <div className="space-y-2">
++          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Domain</p>
++          <div className="flex flex-wrap gap-1.5">
++            <Chip active={domain === "all"} onClick={() => setDomain("all")}>
++              All domains
++            </Chip>
++            {domains.map(([label, count]) => (
++              <Chip key={label} active={domain === label} onClick={() => setDomain(label)}>
++                {label} ({count})
++              </Chip>
++            ))}
++          </div>
++        </div>
++
++        {tags.length > 0 && (
++          <div className="space-y-2">
++            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Pattern / tag</p>
++            <div className="flex flex-wrap gap-1.5">
++              <Chip active={tag === "all"} onClick={() => setTag("all")}>
++                All patterns
++              </Chip>
++              {tags.map(([t, count]) => (
++                <Chip key={t} active={tag === t} onClick={() => setTag(t)} title={`${count} decks`}>
++                  {t} ({count})
++                </Chip>
++              ))}
++            </div>
++          </div>
++        )}
++
++        {companies.length > 0 && (
++          <div className="space-y-2">
++            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Company</p>
++            <div className="flex flex-wrap gap-1.5">
++              <Chip active={company === "all"} onClick={() => setCompany("all")}>
++                All companies
++              </Chip>
++              {companies.map(([c, count]) => (
++                <Chip key={c} active={company === c} onClick={() => setCompany(c)}>
++                  {c} ({count})
++                </Chip>
++              ))}
++            </div>
++          </div>
++        )}
++
++        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm text-slate-600">
++          <span>
++            {filtered.length} deck{filtered.length === 1 ? "" : "s"}
++            {activeFilters ? ` · ${activeFilters} filter${activeFilters === 1 ? "" : "s"} on` : ""}
++          </span>
++          {activeFilters > 0 && (
++            <button type="button" onClick={clearFilters} className="text-orange-800 hover:underline">
++              Clear filters
++            </button>
++          )}
++        </div>
++      </div>
+ 
+       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+         {filtered.map((d) => (
+@@ -227,24 +504,45 @@ export function FlashcardsHubClient(props: {
+               className="block h-full rounded-2xl border border-slate-200 bg-white/80 p-4 transition hover:border-[var(--brand)]/40"
+             >
+               <div className="flex flex-wrap gap-2">
+-                <Badge variant="brand">D{d.difficulty}</Badge>
++                <Badge variant="brand">{diffLabel(d.difficulty)}</Badge>
++                <Badge>D{d.difficulty}</Badge>
++                <Badge>{domainLabel(d.type)}</Badge>
+                 <Badge>{d.cardCount} cards</Badge>
+               </div>
+               <h2 className="mt-3 font-medium text-slate-900">{d.title}</h2>
+               <p className="mt-1 line-clamp-2 text-sm text-slate-600">{d.summary}</p>
+               <div className="mt-3 flex flex-wrap gap-1.5">
+-                {d.tags.slice(0, 4).map((t) => (
+-                  <span key={t} className="rounded border border-slate-200 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+-                    {t}
++                {d.companies.slice(0, 2).map((c) => (
++                  <span
++                    key={c}
++                    className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 font-mono text-[10px] text-orange-900"
++                  >
++                    {c}
+                   </span>
+                 ))}
++                {d.tags
++                  .filter((t) => !NOISE_TAGS.has(t.toLowerCase()))
++                  .slice(0, 3)
++                  .map((t) => (
++                    <span
++                      key={t}
++                      className="rounded border border-slate-200 px-1.5 py-0.5 font-mono text-[10px] text-slate-500"
++                    >
++                      {t}
++                    </span>
++                  ))}
+               </div>
+             </Link>
+           </li>
+         ))}
+       </ul>
+       {!filtered.length && (
+-        <p className="text-center text-sm text-slate-500">No decks match that filter.</p>
++        <p className="text-center text-sm text-slate-500">
++          No decks match those filters.{" "}
++          <button type="button" className="text-orange-800 underline" onClick={clearFilters}>
++            Clear filters
++          </button>
++        </p>
+       )}
+     </div>
+   );
+-- 
+2.43.0
+

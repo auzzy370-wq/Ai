@@ -84,3 +84,6 @@ Apply `crucible-hide-ai-vs-human.patch`: remove Compete nav entry, redirect `/ai
 
 ## Study plane = college course (2026-11-10)
 Apply `crucible-study-course-feel.patch`: syllabus units/weeks for Interview + AI Craft, course-catalog study plans, lecture-session lesson UX that advances in order.
+
+## Flash card filters (2026-11-10)
+Apply `crucible-flashcard-filters.patch`: hub filters for difficulty/domain/pattern/company + sort; in-deck kind filter and hide-known.
