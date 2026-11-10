@@ -1,0 +1,93 @@
+From 33bee19fe3fc9315f189c3aa23890d952e4b8085 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:33:14 +0000
+Subject: [PATCH] Hide AI vs Human until the competition bench is ready
+
+Remove the nav entry, redirect /ai-vs-human to Learn, and drop lesson
+CTAs that pointed learners at the unfinished surface.
+---
+ src/app/(app)/ai-vs-human/page.tsx   | 10 ++++------
+ src/components/layout/app-shell.tsx  |  2 --
+ src/server/learning/ai-curriculum.ts |  8 ++++----
+ 3 files changed, 8 insertions(+), 12 deletions(-)
+
+diff --git a/src/app/(app)/ai-vs-human/page.tsx b/src/app/(app)/ai-vs-human/page.tsx
+index 8b215f6..e81f878 100644
+--- a/src/app/(app)/ai-vs-human/page.tsx
++++ b/src/app/(app)/ai-vs-human/page.tsx
+@@ -1,8 +1,6 @@
+-import { CANDIDATE_ROLES, STAFF_ROLES } from "@/lib/access";
+-import { requirePageRoles } from "@/server/auth/page-guard";
+-import { AiVsHumanClient } from "@/components/competition/ai-vs-human-client";
++import { redirect } from "next/navigation";
+ 
+-export default async function AiVsHumanPage() {
+-  await requirePageRoles([...CANDIDATE_ROLES, ...STAFF_ROLES]);
+-  return <AiVsHumanClient />;
++/** AI vs Human stays out of the product until the bench is ready to ship. */
++export default function AiVsHumanPage() {
++  redirect("/learn");
+ }
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index 43881f4..831a986 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -21,7 +21,6 @@ import {
+   UserRound,
+   BarChart3,
+   Briefcase,
+-  Swords,
+   Trophy,
+   FlaskConical,
+   type LucideIcon,
+@@ -78,7 +77,6 @@ const NAV_GROUPS: NavGroup[] = [
+     title: "Compete",
+     roles: ["CANDIDATE", "TEAM_MEMBER"],
+     items: [
+-      { href: "/ai-vs-human", label: "AI vs Human", icon: Swords, hint: "Same challenges, both sides" },
+       { href: "/leaderboards", label: "Leaderboards", icon: Trophy, hint: "Global rankings" },
+       { href: "/tournaments", label: "Tournaments", icon: FlaskConical, hint: "Timed heats" },
+     ],
+diff --git a/src/server/learning/ai-curriculum.ts b/src/server/learning/ai-curriculum.ts
+index e152c97..396b981 100644
+--- a/src/server/learning/ai-curriculum.ts
++++ b/src/server/learning/ai-curriculum.ts
+@@ -45,7 +45,7 @@ If you exceed it, older content is dropped or the call fails.
+ 3. Never assume private data is “remembered” across sessions unless you store it.
+ 
+ ### Try it
+-Open AI vs Human and submit a challenge to a free model. Watch how a thin prompt yields stubby code — then improve the prompt in the next lesson.`,
++Open Practice, pick a short coding problem, and draft a thin prompt for a free model in your own notes. Watch how vague instructions yield stubby code — then tighten the prompt in the next lesson.`,
+   },
+   {
+     slug: "ai-prompt-fundamentals",
+@@ -106,7 +106,7 @@ On OpenAI-compatible APIs you typically send:
+ - Don’t stuff the entire product manual into every user message — keep system stable and cacheable.
+ 
+ ### Crucible pattern
+-AI vs Human uses a fixed system instruction (“compete… return JSON code”) and a **public-only** user prompt built from the challenge. Hidden tests never enter either message.`,
++Judge-style evals use a fixed system instruction (“return JSON code”) and a **public-only** user prompt built from the challenge. Hidden tests never enter either message.`,
+   },
+   {
+     slug: "ai-structured-output",
+@@ -132,7 +132,7 @@ Free-form prose is for humans. Apps need objects: \`{ code, language }\`, \`{ an
+ - Partial objects when the model hits token limits
+ 
+ ### Practice
+-In AI vs Human, pick Groq and a coding problem. Inspect whether the run is \`verified\` (real API JSON) vs \`experimental\` (mock).`,
++Call a free OpenAI-compatible API (for example Groq) with a coding problem prompt. Inspect whether you get real parseable JSON versus a mock/fallback response.`,
+   },
+   {
+     slug: "ai-integrate-apis",
+@@ -255,7 +255,7 @@ Fixed dataset of inputs + expected properties (exact match, rubric, LLM-as-judge
+ Sample live traffic; score latency, user thumbs, task success.
+ 
+ ### Crucible parallel
+-AI vs Human runs the **same public statement** for models and humans. Hidden suites stay private — just like good eval hygiene.
++Fair evals run the **same public statement** for models and humans. Hidden suites stay private — just like good eval hygiene.
+ 
+ ### Metrics
+ - Exact / structured validity
+-- 
+2.43.0
+

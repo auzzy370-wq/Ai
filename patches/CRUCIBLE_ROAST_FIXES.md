@@ -79,3 +79,5 @@ Apply `crucible-judge-online.patch`:
 - Worker regenerates ephemeral harnesses; absolute bind mounts; Node 22 Alpine for TS strip-types
 - Ops: set Vercel `JUDGE_ONLINE=true` and run `npm run dev:worker` with production `DATABASE_URL` + Docker
 
+## Hide AI vs Human (2026-11-10)
+Apply `crucible-hide-ai-vs-human.patch`: remove Compete nav entry, redirect `/ai-vs-human` → `/learn`, scrub lesson CTAs until the bench ships.
