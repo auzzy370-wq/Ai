@@ -66,3 +66,6 @@ Apply `crucible-security-hardening.patch`: CSRF middleware, env guards, Jobs rat
 ## SEO boost (2026-11-10)
 Apply `crucible-seo-boost.patch`: metadataBase/OG/Twitter, robots+sitemap, JSON-LD, public challenge SEO pages, keyword titles.
 
+## Pro accessible + value loop (2026-11-10)
+Apply `crucible-pro-accessible.patch`: $15/mo · $99/yr, no sprint; Prep nav; auth ?next= resume; post-Accepted CTAs; company mock upgrade copy.
+

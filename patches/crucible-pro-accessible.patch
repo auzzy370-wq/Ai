@@ -1,0 +1,780 @@
+From b2c78e0ff37f8199a44cc7657bc2577e1cfdf617 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:00:58 +0000
+Subject: [PATCH] Make Pro accessible and close the interview value loop
+
+Drop price to $15/mo or $99/yr (no sprint), rewrite Free vs Pro
+copy around real gates, surface Prep nav + Learn cards, resume
+auth to ?next=, and add post-Accepted next steps plus company
+mock upgrade moments.
+---
+ src/app/(app)/interview/page.tsx         | 31 +++++-----
+ src/app/(app)/learn/page.tsx             | 20 +++---
+ src/app/(app)/pricing/page.tsx           |  6 +-
+ src/app/(auth)/login/page.tsx            |  7 ++-
+ src/app/(auth)/register/page.tsx         | 25 ++++++--
+ src/components/auth/sign-in-modal.tsx    |  7 ++-
+ src/components/jobs/jobs-client.tsx      |  5 +-
+ src/components/layout/app-shell.tsx      | 15 ++++-
+ src/components/saas/interview-client.tsx | 23 +++++--
+ src/components/saas/pricing-client.tsx   | 79 ++++++++++++++----------
+ src/components/workspace/ide.tsx         | 79 ++++++++++++++++++++++++
+ src/lib/auth-redirect.ts                 | 13 ++++
+ src/lib/saas.ts                          | 42 ++++++-------
+ 13 files changed, 257 insertions(+), 95 deletions(-)
+ create mode 100644 src/lib/auth-redirect.ts
+
+diff --git a/src/app/(app)/interview/page.tsx b/src/app/(app)/interview/page.tsx
+index 9e71b2d..615f8b6 100644
+--- a/src/app/(app)/interview/page.tsx
++++ b/src/app/(app)/interview/page.tsx
+@@ -1,3 +1,4 @@
++import { Suspense } from "react";
+ import { prisma } from "@/lib/db";
+ import { isPremium } from "@/server/auth/session";
+ import { CANDIDATE_ROLES } from "@/lib/access";
+@@ -42,19 +43,21 @@ export default async function InterviewPage() {
+   }
+ 
+   return (
+-    <InterviewClient
+-      premium={premium}
+-      freeRemaining={premium ? 999 : Math.max(0, FREE_MOCK_LIMIT - totalUsed)}
+-      sims={sims.map((s) => ({
+-        id: s.id,
+-        company: s.company,
+-        role: s.role,
+-        status: s.status,
+-        timedMinutes: s.timedMinutes,
+-        createdAt: s.createdAt.toISOString(),
+-        challenge: s.challenge,
+-        workspaceId: workspaceByChallenge.get(s.challengeId) ?? null,
+-      }))}
+-    />
++    <Suspense fallback={<div className="text-slate-600">Loading mocks…</div>}>
++      <InterviewClient
++        premium={premium}
++        freeRemaining={premium ? 999 : Math.max(0, FREE_MOCK_LIMIT - totalUsed)}
++        sims={sims.map((s) => ({
++          id: s.id,
++          company: s.company,
++          role: s.role,
++          status: s.status,
++          timedMinutes: s.timedMinutes,
++          createdAt: s.createdAt.toISOString(),
++          challenge: s.challenge,
++          workspaceId: workspaceByChallenge.get(s.challengeId) ?? null,
++        }))}
++      />
++    </Suspense>
+   );
+ }
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index 7291086..9418e2f 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -140,17 +140,17 @@ export default async function LearnHubPage() {
+ 
+       <section className="space-y-3">
+         <h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-900">Practice</h2>
+-        <div className="grid gap-4 md:grid-cols-3">
++        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+           <PracticeCard
+             title="Problem bank"
+-            body="Hand-authored coding and mission problems. Hidden suites need a Docker judge."
++            body="Coding and mission problems with public + hidden tests."
+             href="/challenges"
+             cta="Browse problems"
+           />
+           {user ? (
+             <PracticeCard
+               title="Mock interviews"
+-              body="Timed rounds modeled on company loops (signed-in)."
++              body="Timed company rounds — 1 free, then Pro for unlimited."
+               href="/interview"
+               cta="Start a mock"
+             />
+@@ -163,10 +163,16 @@ export default async function LearnHubPage() {
+             />
+           )}
+           <PracticeCard
+-            title="Arcade"
+-            body={`${ARCADE_GAMES.length} two-minute games for hashing, Big-O and binary search.`}
+-            href="/learn/games"
+-            cta="Play"
++            title="Study plans"
++            body="Sequenced paths that turn practice into interview readiness."
++            href={user ? "/study-plans" : "/register?next=/study-plans"}
++            cta="Open plans"
++          />
++          <PracticeCard
++            title="Editorials"
++            body="Writeups after you solve — teasers free, full guides on Pro."
++            href={user ? "/editorials" : "/register?next=/editorials"}
++            cta="Browse writeups"
+           />
+         </div>
+       </section>
+diff --git a/src/app/(app)/pricing/page.tsx b/src/app/(app)/pricing/page.tsx
+index 62ba4fd..07ce9d5 100644
+--- a/src/app/(app)/pricing/page.tsx
++++ b/src/app/(app)/pricing/page.tsx
+@@ -6,11 +6,11 @@ import { PricingClient } from "@/components/saas/pricing-client";
+ import { stripeEnabled } from "@/server/saas/stripe";
+ 
+ export const metadata: Metadata = pageMetadata({
+-  title: "Pricing — free practice & premium interview prep",
++  title: "Pricing — free practice & Pro interview prep from $15/mo",
+   description:
+-    "Start free with lessons and the problem bank. Upgrade for premium mocks, deeper assessments, and advanced prep tools for software engineering and cybersecurity careers.",
++    "Free forever for lessons, the problem bank, and Jobs. Pro adds unlimited company mocks, full editorials, and study sprints — $15/mo or $99/yr.",
+   path: "/pricing",
+-  keywords: ["interview prep pricing", "premium coding practice", "engineering assessment plans"],
++  keywords: ["interview prep pricing", "affordable coding practice", "company mock interviews"],
+ });
+ 
+ export default async function PricingPage() {
+diff --git a/src/app/(auth)/login/page.tsx b/src/app/(auth)/login/page.tsx
+index 0d88128..3a09a1e 100644
+--- a/src/app/(auth)/login/page.tsx
++++ b/src/app/(auth)/login/page.tsx
+@@ -11,12 +11,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
+ import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
+ import { ThemeToggle } from "@/components/layout/theme-toggle";
+ import { CrucibleLockup } from "@/components/brand/crucible-lockup";
++import { postAuthRedirect } from "@/lib/auth-redirect";
+ import { cn } from "@/lib/utils";
+ 
+ function LoginForm() {
+   const router = useRouter();
+   const params = useSearchParams();
+   const hireIntent = params.get("intent") === "hire";
++  const next = params.get("next");
+   const [mode, setMode] = useState<"learn" | "hire">(hireIntent ? "hire" : "learn");
+   const [email, setEmail] = useState("");
+   const [password, setPassword] = useState("");
+@@ -64,7 +66,7 @@ function LoginForm() {
+         body: JSON.stringify({ email, password }),
+       });
+       const text = await res.text();
+-      type LoginJson = { ok?: boolean; error?: { message?: string } };
++      type LoginJson = { ok?: boolean; error?: { message?: string }; data?: { role?: string } };
+       let json: LoginJson | null = null;
+       try {
+         json = text ? (JSON.parse(text) as LoginJson) : null;
+@@ -79,7 +81,8 @@ function LoginForm() {
+         throw new Error(json?.error?.message || gateway || `Login failed (${res.status})`);
+       }
+       toast.success("Authenticated");
+-      router.push("/dashboard");
++      const role = json.data?.role || (hireIntent ? "HIRING_MANAGER" : "CANDIDATE");
++      router.push(postAuthRedirect(role, next));
+       router.refresh();
+     } catch (err) {
+       let message = err instanceof Error ? err.message : "Login failed";
+diff --git a/src/app/(auth)/register/page.tsx b/src/app/(auth)/register/page.tsx
+index 1bcc69b..1f0176d 100644
+--- a/src/app/(auth)/register/page.tsx
++++ b/src/app/(auth)/register/page.tsx
+@@ -1,8 +1,8 @@
+ "use client";
+ 
+ import Link from "next/link";
+-import { useRouter } from "next/navigation";
+-import { useState } from "react";
++import { useRouter, useSearchParams } from "next/navigation";
++import { Suspense, useState } from "react";
+ import { toast } from "sonner";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+@@ -11,10 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
+ import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
+ import { ThemeToggle } from "@/components/layout/theme-toggle";
+ import { CrucibleLockup } from "@/components/brand/crucible-lockup";
++import { postAuthRedirect } from "@/lib/auth-redirect";
+ import { trackOptionGroups } from "@/lib/tracks";
+ 
+-export default function RegisterPage() {
++function RegisterForm() {
+   const router = useRouter();
++  const params = useSearchParams();
++  const next = params.get("next");
+   const [form, setForm] = useState({
+     name: "",
+     email: "",
+@@ -54,7 +57,8 @@ export default function RegisterPage() {
+         return;
+       }
+       toast.success("Account created — welcome to Crucible");
+-      router.push("/dashboard");
++      const role = typeof json.data?.role === "string" ? json.data.role : "CANDIDATE";
++      router.push(postAuthRedirect(role, next));
+       router.refresh();
+     } catch (err) {
+       const message = err instanceof Error ? err.message : "Registration failed";
+@@ -197,7 +201,10 @@ export default function RegisterPage() {
+           </div>
+           <p className="mt-4 text-center text-sm text-slate-600">
+             Already learning?{" "}
+-            <Link className="text-orange-700 hover:underline" href="/login">
++            <Link
++              className="text-orange-700 hover:underline"
++              href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}
++            >
+               Sign in
+             </Link>
+             {" · "}
+@@ -210,3 +217,11 @@ export default function RegisterPage() {
+     </div>
+   );
+ }
++
++export default function RegisterPage() {
++  return (
++    <Suspense fallback={<div className="text-slate-500">Loading…</div>}>
++      <RegisterForm />
++    </Suspense>
++  );
++}
+diff --git a/src/components/auth/sign-in-modal.tsx b/src/components/auth/sign-in-modal.tsx
+index 1987832..3b63ba5 100644
+--- a/src/components/auth/sign-in-modal.tsx
++++ b/src/components/auth/sign-in-modal.tsx
+@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+ import { Label } from "@/components/ui/label";
+ import { CrucibleLockup } from "@/components/brand/crucible-lockup";
++import { postAuthRedirect } from "@/lib/auth-redirect";
+ import { cn } from "@/lib/utils";
+ 
+ const DISMISS_KEY = "crucible_guest_free";
+@@ -18,11 +19,14 @@ export function SignInModal({
+   defaultOpen = false,
+   onOpenChange,
+   freeHref = "/learn",
++  nextHref,
+ }: {
+   open?: boolean;
+   defaultOpen?: boolean;
+   onOpenChange?: (open: boolean) => void;
+   freeHref?: string;
++  /** Resume this path after sign-in when present. */
++  nextHref?: string | null;
+ }) {
+   const router = useRouter();
+   const titleId = useId();
+@@ -73,7 +77,8 @@ export function SignInModal({
+       if (!json.ok) throw new Error(json.error?.message || "Sign-in failed");
+       toast.success("Signed in");
+       setOpen(false);
+-      router.push("/dashboard");
++      const role = typeof json.data?.role === "string" ? json.data.role : "CANDIDATE";
++      router.push(postAuthRedirect(role, nextHref ?? freeHref));
+       router.refresh();
+     } catch (err) {
+       const message = err instanceof Error ? err.message : "Sign-in failed";
+diff --git a/src/components/jobs/jobs-client.tsx b/src/components/jobs/jobs-client.tsx
+index 8c3e91c..56c2e03 100644
+--- a/src/components/jobs/jobs-client.tsx
++++ b/src/components/jobs/jobs-client.tsx
+@@ -328,7 +328,10 @@ export function JobsClient(props: {
+                       <ExternalLink className="h-3.5 w-3.5" />
+                     </Button>
+                   </a>
+-                  <Link href={`/interview`} className="sm:w-auto">
++                  <Link
++                    href={`/interview?company=${encodeURIComponent(job.company)}`}
++                    className="sm:w-auto"
++                  >
+                     <Button variant="secondary" className="w-full sm:w-auto">
+                       Prep {job.company} mock
+                     </Button>
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index d382a85..3d1c949 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -55,12 +55,23 @@ const NAV_GROUPS: NavGroup[] = [
+     roles: ["CANDIDATE", "TEAM_MEMBER"],
+     items: [
+       { href: "/learn", label: "Learn", icon: BookOpen, hint: "Lessons, today’s goals, arcade" },
+-      { href: "/challenges", label: "Practice", icon: Boxes, hint: "Problems & study plans" },
++      { href: "/challenges", label: "Practice", icon: Boxes, hint: "Problem bank" },
+       { href: "/interview", label: "Mocks", icon: Timer, hint: "Timed company rounds" },
+       { href: "/jobs", label: "Jobs", icon: Briefcase, hint: "Official career board links" },
+       { href: "/candidates", label: "Profile", icon: UserRound, hint: "Your progress & public page" },
+     ],
+   },
++  {
++    id: "prep",
++    title: "Prep",
++    roles: ["CANDIDATE", "TEAM_MEMBER"],
++    items: [
++      { href: "/study-plans", label: "Study plans", icon: ScrollText, hint: "Sequenced interview paths" },
++      { href: "/editorials", label: "Editorials", icon: BookOpen, hint: "Writeups after you solve" },
++      { href: "/playgrounds", label: "Playgrounds", icon: Boxes, hint: "Scratch pads" },
++      { href: "/pricing", label: "Pro", icon: Sparkles, hint: "Unlimited mocks & full writeups" },
++    ],
++  },
+   {
+     id: "compete",
+     title: "Compete",
+@@ -291,7 +302,7 @@ export function AppShell({
+           </Link>
+           {user!.plan !== "PREMIUM" && (
+             <Link href="/pricing" className="text-amber-800 hover:underline">
+-              Upgrade →
++              Get Pro →
+             </Link>
+           )}
+         </div>
+diff --git a/src/components/saas/interview-client.tsx b/src/components/saas/interview-client.tsx
+index 4b1bca2..05396bd 100644
+--- a/src/components/saas/interview-client.tsx
++++ b/src/components/saas/interview-client.tsx
+@@ -2,7 +2,7 @@
+ 
+ import Link from "next/link";
+ import { useMemo, useState } from "react";
+-import { useRouter } from "next/navigation";
++import { useRouter, useSearchParams } from "next/navigation";
+ import { toast } from "sonner";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+@@ -29,13 +29,19 @@ type Sim = {
+   workspaceId?: string | null;
+ };
+ 
++function initialCompany(param: string | null) {
++  if (param && (INTERVIEW_COMPANIES as readonly string[]).includes(param)) return param;
++  return INTERVIEW_COMPANIES[0] ?? "Google";
++}
++
+ export function InterviewClient(props: {
+   premium: boolean;
+   sims: Sim[];
+   freeRemaining: number;
+ }) {
+   const router = useRouter();
+-  const [company, setCompany] = useState<string>(INTERVIEW_COMPANIES[0] ?? "Google");
++  const params = useSearchParams();
++  const [company, setCompany] = useState<string>(() => initialCompany(params.get("company")));
+   const [role, setRole] = useState<string>(INTERVIEW_ROLES[0]);
+   const [roundId, setRoundId] = useState<InterviewRoundKind>("coding");
+   const [busy, setBusy] = useState(false);
+@@ -101,7 +107,7 @@ export function InterviewClient(props: {
+         {!props.premium && !canStart && (
+           <Link href="/pricing" className="min-w-0 flex-1 sm:flex-none">
+             <Button variant="outline" className="w-full sm:w-auto">
+-              Go Premium
++              Unlock Pro · unlimited {company}
+             </Button>
+           </Link>
+         )}
+@@ -129,14 +135,19 @@ export function InterviewClient(props: {
+             <div className="min-w-0 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+               {props.freeRemaining > 0 ? (
+                 <>
+-                  <strong>{props.freeRemaining}</strong> free mock left · then Premium for unlimited
++                  <strong>{props.freeRemaining}</strong> free company mock left · then{" "}
++                  <Link href="/pricing" className="font-medium text-orange-800 underline">
++                    Pro ($15/mo or $99/yr)
++                  </Link>{" "}
++                  for unlimited rounds
+                 </>
+               ) : (
+                 <>
+-                  Free mock used.{" "}
++                  Free mock used. Pro unlocks unlimited {company} rounds, full editorials, and study sprints —{" "}
+                   <Link href="/pricing" className="font-medium text-orange-800 underline">
+-                    Unlock unlimited
++                    from $15/mo
+                   </Link>
++                  .
+                 </>
+               )}
+             </div>
+diff --git a/src/components/saas/pricing-client.tsx b/src/components/saas/pricing-client.tsx
+index 8843f6a..573a45e 100644
+--- a/src/components/saas/pricing-client.tsx
++++ b/src/components/saas/pricing-client.tsx
+@@ -1,12 +1,14 @@
+ "use client";
+ 
++import Link from "next/link";
+ import { useRouter, useSearchParams } from "next/navigation";
+ import { useEffect, useState } from "react";
+ import { toast } from "sonner";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+-import { PLAN_PRICING, PREMIUM_FEATURES } from "@/lib/saas";
++import { FREE_PLAYGROUND_LIMIT, PLAN_PRICING, PREMIUM_FEATURES } from "@/lib/saas";
++import { FREE_MOCK_LIMIT } from "@/server/saas/interview-rounds";
+ 
+ export function PricingClient(props: {
+   premium: boolean;
+@@ -19,10 +21,12 @@ export function PricingClient(props: {
+   const params = useSearchParams();
+   const [busy, setBusy] = useState(false);
+   const [interval, setInterval] = useState<"monthly" | "yearly">("yearly");
++  const sellable = props.stripeConfigured || Boolean(props.mockBilling);
++  const yearlyPerMonth = (PLAN_PRICING.yearly / 12).toFixed(0);
+ 
+   useEffect(() => {
+     if (params.get("upgraded") === "1" || params.get("checkout") === "success") {
+-      toast.success("Premium unlocked");
++      toast.success("Pro unlocked");
+       router.replace("/pricing");
+       router.refresh();
+     }
+@@ -46,7 +50,7 @@ export function PricingClient(props: {
+         window.location.href = json.data.url;
+         return;
+       }
+-      toast.success("Premium unlocked");
++      toast.success("Pro unlocked");
+       router.refresh();
+     } catch (e) {
+       toast.error(e instanceof Error ? e.message : "Checkout failed");
+@@ -58,18 +62,18 @@ export function PricingClient(props: {
+   return (
+     <div className="animate-rise space-y-8">
+       <header className="mx-auto max-w-3xl text-center">
+-        <p className="font-mono text-xs tracking-[0.3em] text-orange-700">PROVE THE CRAFT</p>
++        <p className="font-mono text-xs tracking-[0.3em] text-orange-700">PRO · ACCESSIBLE</p>
+         <h1 className="mt-3 font-serif-display text-3xl tracking-tight sm:text-4xl">
+-          Evidence over puzzles
++          Free to practice. Pro when you&apos;re interviewing.
+         </h1>
+         <p className="mt-3 text-slate-600">
+-          {props.stripeConfigured || props.mockBilling
+-            ? "Free forever for core practice. Premium adds company intel, priority judge queue, mocks, and more."
+-            : "Free practice is live on this host. Premium checkout is not configured here — no paid upgrades yet."}
++          {sellable
++            ? "Keep lessons, the problem bank, and Jobs free forever. Pro closes the loop: unlimited company mocks, full editorials, and study sprints."
++            : "Free practice is live on this host. Pro checkout is not configured here — no paid upgrades yet."}
+         </p>
+         {props.premium && (
+           <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-900 dark:text-amber-100">
+-            <Badge variant="amber">Premium</Badge>
++            <Badge variant="amber">Pro</Badge>
+             Active
+             {props.planExpiresAt ? ` · renews/expires ${new Date(props.planExpiresAt).toLocaleDateString()}` : ""}
+           </div>
+@@ -80,27 +84,33 @@ export function PricingClient(props: {
+         <Card>
+           <CardHeader>
+             <CardTitle>Free</CardTitle>
+-            <CardDescription>Coding judges + production missions</CardDescription>
++            <CardDescription>Learn + practice with no card required</CardDescription>
+           </CardHeader>
+           <CardContent className="space-y-4">
+             <div className="font-mono text-3xl text-slate-900">$0</div>
+             <ul className="space-y-2 text-sm text-slate-600">
+-              <li>Public evidence sessions + daily challenge</li>
+-              <li>Free study plans</li>
+-              <li>3 playgrounds</li>
+-              <li>Six languages · Docker judge when a worker is online</li>
++              <li>Lessons, problem bank, and Jobs board</li>
++              <li>Free study plans + daily practice</li>
++              <li>{FREE_MOCK_LIMIT} timed company mock</li>
++              <li>Editorial teasers after you solve</li>
++              <li>{FREE_PLAYGROUND_LIMIT} playgrounds · Docker judge when online</li>
+             </ul>
++            <Link href="/learn">
++              <Button variant="secondary" className="w-full">
++                Start free
++              </Button>
++            </Link>
+           </CardContent>
+         </Card>
+-        <Card className={props.stripeConfigured || props.mockBilling ? "border-orange-300/60 bg-orange-500/5" : "border-slate-200"}>
++        <Card className={sellable ? "border-orange-300/60 bg-orange-500/5" : "border-slate-200"}>
+           <CardHeader>
+             <div className="flex items-center gap-2">
+-              <CardTitle>Premium</CardTitle>
+-              {(props.stripeConfigured || props.mockBilling) && <Badge variant="brand">Most popular</Badge>}
++              <CardTitle>Pro</CardTitle>
++              {sellable && <Badge variant="brand">Best for interview season</Badge>}
+             </div>
+             <CardDescription>
+-              {props.stripeConfigured || props.mockBilling
+-                ? "Company tags, priority judge queue, mocks, and deeper practice packs."
++              {sellable
++                ? "Unlimited mocks, full editorials, Pro study sprints, and IDE power tools."
+                 : "Not for sale on this deployment. Free problems and lessons stay available."}
+             </CardDescription>
+           </CardHeader>
+@@ -109,7 +119,12 @@ export function PricingClient(props: {
+               <div className="font-mono text-3xl text-slate-900">
+                 ${interval === "yearly" ? PLAN_PRICING.yearly : PLAN_PRICING.monthly}
+               </div>
+-              <div className="pb-1 text-sm text-slate-600">/{interval === "yearly" ? "year" : "month"}</div>
++              <div className="pb-1 text-sm text-slate-600">
++                /{interval === "yearly" ? "year" : "month"}
++                {interval === "yearly" ? (
++                  <span className="ml-2 text-emerald-700">≈ ${yearlyPerMonth}/mo</span>
++                ) : null}
++              </div>
+             </div>
+             <div className="flex gap-2">
+               <Button
+@@ -118,7 +133,7 @@ export function PricingClient(props: {
+                 variant={interval === "monthly" ? "default" : "secondary"}
+                 onClick={() => setInterval("monthly")}
+               >
+-                Monthly
++                Monthly · ${PLAN_PRICING.monthly}
+               </Button>
+               <Button
+                 type="button"
+@@ -126,18 +141,20 @@ export function PricingClient(props: {
+                 variant={interval === "yearly" ? "default" : "secondary"}
+                 onClick={() => setInterval("yearly")}
+               >
+-                Yearly · save more
++                Yearly · best value
+               </Button>
+             </div>
+-            {props.stripeConfigured || props.mockBilling ? (
+-              <Button className="w-full" disabled={busy || props.premium} onClick={upgrade}>
++            {sellable ? (
++              <Button className="w-full" disabled={busy || props.premium} onClick={() => void upgrade()}>
+                 {props.premium
+-                  ? "Already Premium"
++                  ? "Already on Pro"
+                   : busy
+                     ? "Redirecting…"
+                     : props.stripeConfigured
+-                      ? "Checkout with Stripe"
+-                      : "Enable demo Premium (no charge)"}
++                      ? interval === "yearly"
++                        ? "Get Pro yearly"
++                        : "Get Pro monthly"
++                      : "Enable demo Pro (no charge)"}
+               </Button>
+             ) : (
+               <Button className="w-full" disabled>
+@@ -146,17 +163,17 @@ export function PricingClient(props: {
+             )}
+             <p className="text-xs text-slate-500">
+               {props.stripeConfigured
+-                ? "Secure Stripe Checkout. Webhooks activate Premium on payment."
++                ? "Secure Stripe Checkout. Cancel anytime. No sprint packs — just Free and Pro."
+                 : props.mockBilling
+                   ? "Demo billing only — set STRIPE_SECRET_KEY for real Checkout, or unset ALLOW_MOCK_BILLING in production."
+-                  : "Stripe is not configured. Premium upgrades are disabled on this deployment."}
++                  : "Stripe is not configured. Pro upgrades are disabled on this deployment."}
+             </p>
+           </CardContent>
+         </Card>
+       </section>
+ 
+-      {(props.stripeConfigured || props.mockBilling) && (
+-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
++      {sellable && (
++        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+           {PREMIUM_FEATURES.map((f) => (
+             <Card key={f.id} className="border-slate-200">
+               <CardHeader>
+diff --git a/src/components/workspace/ide.tsx b/src/components/workspace/ide.tsx
+index 57c0922..8688122 100644
+--- a/src/components/workspace/ide.tsx
++++ b/src/components/workspace/ide.tsx
+@@ -904,6 +904,13 @@ export function WorkspaceIde(props: {
+                 <p className="text-sm text-slate-500">Click Run for public examples, then Submit for the hidden harness.</p>
+               )}
+               <PinpointPanel pinpoint={pinpoint} />
++              {judgeVerdict?.label === "Accepted" && (
++                <AcceptedNextSteps
++                  premium={premium}
++                  challengeSlug={props.challengeSlug}
++                  companies={props.companies}
++                />
++              )}
+               <Textarea className="mt-3 min-h-[80px] font-mono text-xs" value={terminal} readOnly />
+             </section>
+           </div>
+@@ -1293,6 +1300,14 @@ export function WorkspaceIde(props: {
+           )}
+           <div className="rounded-xl border border-slate-200 bg-white/80 p-3 sm:col-span-2 xl:col-span-1">
+             <PinpointPanel pinpoint={pinpoint} compact />
++            {judgeVerdict?.label === "Accepted" && (
++              <AcceptedNextSteps
++                premium={premium}
++                challengeSlug={props.challengeSlug}
++                companies={props.companies}
++                compact
++              />
++            )}
+           </div>
+           <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+             <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">Git</div>
+@@ -1351,6 +1366,70 @@ function guessLang(path: string, fallback: string) {
+   return "typescript";
+ }
+ 
++function AcceptedNextSteps(props: {
++  premium: boolean;
++  challengeSlug?: string;
++  companies?: string[];
++  compact?: boolean;
++}) {
++  const company = props.companies?.[0];
++  const editorialHref = props.challengeSlug
++    ? `/editorials?slug=${encodeURIComponent(props.challengeSlug)}`
++    : "/editorials";
++  const mockHref = company ? `/interview?company=${encodeURIComponent(company)}` : "/interview";
++  const jobsHref = company ? `/jobs?q=${encodeURIComponent(company)}` : "/jobs";
++
++  return (
++    <div
++      className={cn(
++        "mt-3 space-y-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3",
++        props.compact && "mt-2",
++      )}
++    >
++      <div className="text-xs font-semibold uppercase tracking-wider text-emerald-800">You cleared it — keep going</div>
++      <div className="flex flex-wrap gap-2">
++        <a
++          href={editorialHref}
++          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
++        >
++          {props.premium ? "Open editorial" : "Editorial teaser"}
++        </a>
++        <a
++          href="/challenges"
++          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
++        >
++          Next problem
++        </a>
++        <a
++          href={mockHref}
++          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
++        >
++          {company ? `${company} mock` : "Company mock"}
++        </a>
++        <a
++          href={jobsHref}
++          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
++        >
++          Related jobs
++        </a>
++        {!props.premium && (
++          <a
++            href="/pricing"
++            className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100"
++          >
++            Unlock Pro — unlimited mocks
++          </a>
++        )}
++      </div>
++      {!props.premium && (
++        <p className="text-[11px] text-slate-600">
++          Free keeps practice open. Pro unlocks full editorials and unlimited company mocks when you&apos;re interviewing.
++        </p>
++      )}
++    </div>
++  );
++}
++
+ function PinpointPanel({ pinpoint, compact }: { pinpoint: Pinpoint | null; compact?: boolean }) {
+   if (!pinpoint) {
+     return (
+diff --git a/src/lib/auth-redirect.ts b/src/lib/auth-redirect.ts
+new file mode 100644
+index 0000000..76444f6
+--- /dev/null
++++ b/src/lib/auth-redirect.ts
+@@ -0,0 +1,13 @@
++import { homeForRole } from "@/lib/access";
++
++/** Safe post-login destination from `?next=` (same-origin path only). */
++export function safeNextPath(next: string | null | undefined): string | null {
++  if (!next) return null;
++  if (!next.startsWith("/") || next.startsWith("//")) return null;
++  if (next.startsWith("/api") || next.startsWith("/login") || next.startsWith("/register")) return null;
++  return next;
++}
++
++export function postAuthRedirect(role: string, next?: string | null) {
++  return safeNextPath(next) ?? homeForRole(role);
++}
+diff --git a/src/lib/saas.ts b/src/lib/saas.ts
+index 10a9cb9..9dcf56e 100644
+--- a/src/lib/saas.ts
++++ b/src/lib/saas.ts
+@@ -1,51 +1,47 @@
+ export const PREMIUM_FEATURES = [
+   {
+-    id: "company-questions",
+-    title: "Company-tagged practice",
+-    blurb: "Filter timed sessions by company tags and estimated frequency.",
++    id: "interview-sims",
++    title: "Unlimited company mocks",
++    blurb: "Free includes 1 timed mock. Pro unlocks unlimited company rounds with the same public + hidden judge.",
+   },
+   {
+-    id: "lightning-judge",
+-    title: "Lightning Judge",
+-    blurb: "Higher priority in the Docker judge queue when a worker is attached and busy.",
++    id: "premium-content",
++    title: "Full editorials & Pro problems",
++    blurb: "Unlock writeups after you solve, plus Premium-marked missions and harness packs.",
+   },
+   {
+-    id: "premium-content",
+-    title: "Premium content",
+-    blurb: "Extra missions, editorials, and harness packs marked Premium.",
++    id: "study-sprints",
++    title: "Premium study sprints",
++    blurb: "Company and security sprints that sequence problems into a finishable interview path.",
+   },
+   {
+     id: "autocomplete",
+-    title: "Autocomplete",
+-    blurb: "Language-aware completions in the workspace editor (provider key required).",
++    title: "AI autocomplete",
++    blurb: "Language-aware completions in the workspace editor while you practice.",
+   },
+   {
+     id: "debugger",
+     title: "Debugger",
+-    blurb: "Interactive debug helpers in the workspace — beyond print statements.",
++    blurb: "Step through failing cases in the IDE instead of print-debugging alone.",
+   },
+   {
+-    id: "interview-sims",
+-    title: "Timed company mocks",
+-    blurb: "Company-tagged timed rounds using the same public + hidden judge path as assessments.",
+-  },
+-  {
+-    id: "cloud-storage",
+-    title: "Cloud storage",
+-    blurb: "Workspace files sync so sessions continue across devices.",
++    id: "lightning-judge",
++    title: "Lightning Judge",
++    blurb: "Higher priority in the Docker judge queue when a worker is busy.",
+   },
+   {
+     id: "unlimited-playgrounds",
+     title: "Unlimited playgrounds",
+-    blurb: "Create unlimited playgrounds and organize them with folders.",
++    blurb: "Free includes 3 scratch pads. Pro removes the cap and keeps folders organized.",
+   },
+ ] as const;
+ 
+ export const FREE_PLAYGROUND_LIMIT = 3;
+ 
++/** Accessible Pro pricing — yearly is the default “smart” plan. */
+ export const PLAN_PRICING = {
+-  monthly: 35,
+-  yearly: 159,
++  monthly: 15,
++  yearly: 99,
+ } as const;
+ 
+ export const COMPANIES = [
+-- 
+2.43.0
+
