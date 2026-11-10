@@ -1,7 +1,7 @@
 From b2c78e0ff37f8199a44cc7657bc2577e1cfdf617 Mon Sep 17 00:00:00 2001
 From: Cursor Agent <cursoragent@cursor.com>
 Date: Tue, 10 Nov 2026 20:00:58 +0000
-Subject: [PATCH] Make Pro accessible and close the interview value loop
+Subject: [PATCH 1/2] Make Pro accessible and close the interview value loop
 
 Drop price to $15/mo or $99/yr (no sprint), rewrite Free vs Pro
 copy around real gates, surface Prep nav + Learn cards, resume
@@ -775,6 +775,116 @@ index 10a9cb9..9dcf56e 100644
  } as const;
  
  export const COMPANIES = [
+-- 
+2.43.0
+
+
+From 9fb38b13dca6db9ead45ae143d432ad356cdbd17 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:03:52 +0000
+Subject: [PATCH 2/2] Fix lint blocking Pro-accessible production build
+
+---
+ src/app/(app)/learn/page.tsx     | 17 ++++++++---------
+ src/components/workspace/ide.tsx | 21 +++++++++++----------
+ 2 files changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index 9418e2f..aa44cfb 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -5,16 +5,7 @@ import { CANDIDATE_ROLES } from "@/lib/access";
+ import { prisma } from "@/lib/db";
+ import { pageMetadata } from "@/lib/seo";
+ import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
+-
+-export const metadata: Metadata = pageMetadata({
+-  title: "Learn engineering craft — lessons, XP, and interview paths",
+-  description:
+-    "Free lessons for interview craft and AI craft, progress tracking, and guided practice paths for software engineering and cybersecurity.",
+-  path: "/learn",
+-  keywords: ["engineering lessons", "interview craft", "learn to code interviews", "cybersecurity lessons"],
+-});
+ import { buildLearnerGameState, guestLearnerGameState, LESSON_XP } from "@/server/learning/gamification";
+-import { ARCADE_GAMES } from "@/server/learning/arcade-games";
+ import { ProgressHero } from "@/components/learn/progress-hero";
+ import { SaveProgressCta } from "@/components/learn/save-progress-cta";
+ import { JudgeBanner } from "@/components/layout/judge-banner";
+@@ -23,6 +14,14 @@ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+ import { cn } from "@/lib/utils";
+ 
++export const metadata: Metadata = pageMetadata({
++  title: "Learn engineering craft — lessons, XP, and interview paths",
++  description:
++    "Free lessons for interview craft and AI craft, progress tracking, and guided practice paths for software engineering and cybersecurity.",
++  path: "/learn",
++  keywords: ["engineering lessons", "interview craft", "learn to code interviews", "cybersecurity lessons"],
++});
++
+ export default async function LearnHubPage() {
+   const user = await requirePageRolesOrGuest("/learn", CANDIDATE_ROLES);
+   const [game, assigned] = user
+diff --git a/src/components/workspace/ide.tsx b/src/components/workspace/ide.tsx
+index 8688122..dbf5523 100644
+--- a/src/components/workspace/ide.tsx
++++ b/src/components/workspace/ide.tsx
+@@ -1,6 +1,7 @@
+ "use client";
+ 
+ import dynamic from "next/dynamic";
++import Link from "next/link";
+ import { useEffect, useMemo, useRef, useState } from "react";
+ import { useRouter } from "next/navigation";
+ import { toast } from "sonner";
+@@ -1388,37 +1389,37 @@ function AcceptedNextSteps(props: {
+     >
+       <div className="text-xs font-semibold uppercase tracking-wider text-emerald-800">You cleared it — keep going</div>
+       <div className="flex flex-wrap gap-2">
+-        <a
++        <Link
+           href={editorialHref}
+           className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
+         >
+           {props.premium ? "Open editorial" : "Editorial teaser"}
+-        </a>
+-        <a
++        </Link>
++        <Link
+           href="/challenges"
+           className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
+         >
+           Next problem
+-        </a>
+-        <a
++        </Link>
++        <Link
+           href={mockHref}
+           className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
+         >
+           {company ? `${company} mock` : "Company mock"}
+-        </a>
+-        <a
++        </Link>
++        <Link
+           href={jobsHref}
+           className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
+         >
+           Related jobs
+-        </a>
++        </Link>
+         {!props.premium && (
+-          <a
++          <Link
+             href="/pricing"
+             className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100"
+           >
+             Unlock Pro — unlimited mocks
+-          </a>
++          </Link>
+         )}
+       </div>
+       {!props.premium && (
 -- 
 2.43.0
 
