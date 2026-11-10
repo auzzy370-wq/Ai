@@ -81,3 +81,6 @@ Apply `crucible-judge-online.patch`:
 
 ## Hide AI vs Human (2026-11-10)
 Apply `crucible-hide-ai-vs-human.patch`: remove Compete nav entry, redirect `/ai-vs-human` → `/learn`, scrub lesson CTAs until the bench ships.
+
+## Study plane = college course (2026-11-10)
+Apply `crucible-study-course-feel.patch`: syllabus units/weeks for Interview + AI Craft, course-catalog study plans, lecture-session lesson UX that advances in order.

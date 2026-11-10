@@ -1,0 +1,1225 @@
+From 50de54778ad19f63c44080276c21f5a99acc331e Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:39:46 +0000
+Subject: [PATCH] Make the study plane feel like a college course
+
+Add syllabus units/weeks for Interview and AI Craft, course-catalog
+study plans, and lecture-session lesson pages that advance in order.
+---
+ src/app/(app)/learn/ai/[slug]/page.tsx        |   2 +
+ src/app/(app)/learn/interview/[slug]/page.tsx |   2 +
+ src/app/(app)/learn/page.tsx                  |  43 +++--
+ src/app/(app)/study-plans/page.tsx            |   1 +
+ src/components/layout/app-shell.tsx           |   2 +-
+ src/components/learn/ai-craft-client.tsx      |  12 +-
+ src/components/learn/ai-lesson-client.tsx     |  10 +-
+ src/components/learn/craft-path-client.tsx    | 133 +++++++++-------
+ .../learn/interview-craft-client.tsx          |  12 +-
+ .../learn/interview-lesson-client.tsx         |  10 +-
+ src/components/learn/lesson-player.tsx        | 123 ++++++++++-----
+ src/components/saas/study-plans-client.tsx    | 149 +++++++++++-------
+ src/server/learning/course-syllabus.ts        | 105 ++++++++++++
+ 13 files changed, 414 insertions(+), 190 deletions(-)
+ create mode 100644 src/server/learning/course-syllabus.ts
+
+diff --git a/src/app/(app)/learn/ai/[slug]/page.tsx b/src/app/(app)/learn/ai/[slug]/page.tsx
+index 8ad5958..37a3c34 100644
+--- a/src/app/(app)/learn/ai/[slug]/page.tsx
++++ b/src/app/(app)/learn/ai/[slug]/page.tsx
+@@ -31,6 +31,8 @@ export default async function AiLessonPage({ params }: { params: Promise<{ slug:
+       done={Boolean(enrollment?.completedSlugs.includes(lesson.slug))}
+       prevSlug={idx > 0 ? AI_LESSONS[idx - 1]!.slug : null}
+       nextSlug={idx >= 0 && idx < AI_LESSONS.length - 1 ? AI_LESSONS[idx + 1]!.slug : null}
++      sessionIndex={Math.max(0, idx)}
++      sessionTotal={AI_LESSONS.length}
+     />
+   );
+ }
+diff --git a/src/app/(app)/learn/interview/[slug]/page.tsx b/src/app/(app)/learn/interview/[slug]/page.tsx
+index 8b95c2e..ab36971 100644
+--- a/src/app/(app)/learn/interview/[slug]/page.tsx
++++ b/src/app/(app)/learn/interview/[slug]/page.tsx
+@@ -35,6 +35,8 @@ export default async function InterviewLessonPage({ params }: { params: Promise<
+       done={Boolean(enrollment?.completedSlugs.includes(lesson.slug))}
+       prevSlug={idx > 0 ? INTERVIEW_LESSONS[idx - 1]!.slug : null}
+       nextSlug={idx >= 0 && idx < INTERVIEW_LESSONS.length - 1 ? INTERVIEW_LESSONS[idx + 1]!.slug : null}
++      sessionIndex={Math.max(0, idx)}
++      sessionTotal={INTERVIEW_LESSONS.length}
+     />
+   );
+ }
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index 335604e..2498787 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -51,11 +51,11 @@ export default async function LearnHubPage() {
+       <header className="space-y-4">
+         <div>
+           <p className="font-mono text-xs tracking-[0.3em] text-[var(--brand)]">LEARN{!user ? " · FREE" : ""}</p>
+-          <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">Get interview-ready</h1>
++          <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">Learn like you&apos;re in the course</h1>
+           <p className="mt-2 max-w-2xl text-slate-600">
+             {user
+-              ? "Short lessons, then real problems judged on hidden tests. You earn XP for work you finish."
+-              : "Everything here is free to try. Sign in when you want your XP and streak saved."}
++              ? "Full syllabi with units and lectures — work them in order, then labs under the same judges employers use."
++              : "Browse the syllabi free. Sign in when you want enrollment, XP, and streak saved."}
+           </p>
+         </div>
+         <ProgressHero game={game} />
+@@ -120,19 +120,28 @@ export default async function LearnHubPage() {
+       </section>
+ 
+       <section className="space-y-3">
+-        <h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-900">Paths</h2>
++        <div>
++          <h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-900">Courses in session</h2>
++          <p className="mt-1 text-sm text-slate-500">
++            Syllabus → lecture → lab. Finish the term in order so it feels like a real class, not a checklist dump.
++          </p>
++        </div>
+         <div className="grid gap-4 lg:grid-cols-2">
+           <PathCard
+-            label="Interview Craft"
+-            blurb="How coding interviews actually run, and the patterns that come up most."
++            label="CRUC-201 · Interview Craft"
++            blurb="3-credit course: foundations, patterns, and live rounds — attend every lecture."
+             path={game.paths.interview}
+             browseHref="/learn/interview"
++            cta="Open syllabus"
++            continueCta="Attend next class"
+           />
+           <PathCard
+-            label="AI Craft"
+-            blurb="Building with LLMs: prompting, evals, retrieval and shipping to production."
++            label="CRUC-310 · AI Craft"
++            blurb="4-credit course: prompting through production AI — units, lectures, and studio labs."
+             path={game.paths.ai}
+             browseHref="/learn/ai"
++            cta="Open syllabus"
++            continueCta="Attend next class"
+           />
+         </div>
+       </section>
+@@ -168,10 +177,10 @@ export default async function LearnHubPage() {
+             />
+           )}
+           <PracticeCard
+-            title="Study plans"
+-            body="Sequenced paths that turn practice into interview readiness."
++            title="Study plane"
++            body="College-style courses and practicums — enroll, follow the syllabus, finish the term."
+             href={user ? "/study-plans" : "/register?next=/study-plans"}
+-            cta="Open plans"
++            cta="Open catalog"
+           />
+           <PracticeCard
+             title="Editorials"
+@@ -189,6 +198,8 @@ function PathCard(props: {
+   label: string;
+   blurb: string;
+   browseHref: string;
++  cta?: string;
++  continueCta?: string;
+   path: {
+     percent: number;
+     done: number;
+@@ -203,7 +214,7 @@ function PathCard(props: {
+       <div className="flex flex-wrap items-center justify-between gap-2">
+         <h3 className="text-lg font-semibold text-slate-900">{props.label}</h3>
+         <span className="font-mono text-xs text-slate-500">
+-          {path.done}/{path.total} lessons · +{LESSON_XP} XP each
++          {path.done}/{path.total} lectures · +{LESSON_XP} XP each
+         </span>
+       </div>
+       <p className="mt-1 text-sm text-slate-600">{props.blurb}</p>
+@@ -216,18 +227,18 @@ function PathCard(props: {
+       <p className="mt-3 text-sm text-slate-700">
+         {path.nextTitle ? (
+           <>
+-            Next: <span className="font-medium">{path.nextTitle}</span>
++            Next class: <span className="font-medium">{path.nextTitle}</span>
+           </>
+         ) : (
+-          "Path complete."
++          "Course complete — review the syllabus anytime."
+         )}
+       </p>
+       <div className="mt-4 flex flex-wrap gap-2">
+         <Link href={path.nextHref}>
+-          <Button>{path.nextTitle ? "Continue" : "Review"}</Button>
++          <Button>{path.nextTitle ? props.continueCta ?? "Continue" : "Review"}</Button>
+         </Link>
+         <Link href={props.browseHref}>
+-          <Button variant="secondary">All lessons</Button>
++          <Button variant="secondary">{props.cta ?? "Open syllabus"}</Button>
+         </Link>
+       </div>
+     </div>
+diff --git a/src/app/(app)/study-plans/page.tsx b/src/app/(app)/study-plans/page.tsx
+index 3c5fd33..5783050 100644
+--- a/src/app/(app)/study-plans/page.tsx
++++ b/src/app/(app)/study-plans/page.tsx
+@@ -59,6 +59,7 @@ export default async function StudyPlansPage() {
+               done: completed.has(l!.slug),
+               href: `${l!.hrefBase}/${l!.slug}`,
+               xp: itemXp({ itemKind: "lesson" }),
++              level: l!.level,
+             }))
+         : plan.challengeSlugs
+             .map((slug) => challengeBySlug.get(slug))
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index 831a986..7502391 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -66,7 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
+     roles: ["CANDIDATE", "TEAM_MEMBER"],
+     items: [
+       { href: "/flashcards", label: "Flash cards", icon: BookOpen, hint: "Drill each problem’s patterns" },
+-      { href: "/study-plans", label: "Study plans", icon: ScrollText, hint: "Sequenced interview paths" },
++      { href: "/study-plans", label: "Study plans", icon: ScrollText, hint: "College-style courses & practicums" },
+       { href: "/editorials", label: "Editorials", icon: BookOpen, hint: "Writeups after you solve" },
+       { href: "/playgrounds", label: "Playgrounds", icon: Boxes, hint: "Scratch pads" },
+       { href: "/pricing", label: "Pro", icon: Sparkles, hint: "Unlimited mocks & full writeups" },
+diff --git a/src/components/learn/ai-craft-client.tsx b/src/components/learn/ai-craft-client.tsx
+index e7cc921..797f015 100644
+--- a/src/components/learn/ai-craft-client.tsx
++++ b/src/components/learn/ai-craft-client.tsx
+@@ -1,23 +1,17 @@
+ "use client";
+ 
+ import { CraftPathClient } from "@/components/learn/craft-path-client";
++import { AI_COURSE } from "@/server/learning/course-syllabus";
+ 
+ export function AiCraftClient() {
+   return (
+     <CraftPathClient
+       track="ai"
+-      eyebrow="AI CRAFT"
+-      title="Ship AI features with judgment"
+-      blurb="Prompting, APIs, tools, RAG, agents, evals, and safety. Each lesson earns XP; then practice on real problems."
++      course={AI_COURSE}
+       progressApi="/api/learn/ai/progress"
+       lessonHref={(slug) => `/learn/ai/${slug}`}
+-      levels={[
+-        { id: "foundations", label: "Foundations" },
+-        { id: "builder", label: "Builder" },
+-        { id: "production", label: "Production" },
+-      ]}
+       secondaryCtas={[
+-        { href: "/study-plans", label: "Study plans", variant: "secondary" },
++        { href: "/study-plans", label: "All courses", variant: "secondary" },
+         { href: "/learn", label: "Learn hub", variant: "ghost" },
+       ]}
+     />
+diff --git a/src/components/learn/ai-lesson-client.tsx b/src/components/learn/ai-lesson-client.tsx
+index fac8ece..de9ca89 100644
+--- a/src/components/learn/ai-lesson-client.tsx
++++ b/src/components/learn/ai-lesson-client.tsx
+@@ -1,6 +1,7 @@
+ "use client";
+ 
+ import { LessonPlayer } from "@/components/learn/lesson-player";
++import { AI_COURSE, lectureIndexLabel, unitForLevel } from "@/server/learning/course-syllabus";
+ 
+ export function AiLessonClient(props: {
+   slug: string;
+@@ -14,14 +15,21 @@ export function AiLessonClient(props: {
+   done: boolean;
+   prevSlug: string | null;
+   nextSlug: string | null;
++  sessionIndex: number;
++  sessionTotal: number;
+ }) {
++  const unit = unitForLevel(AI_COURSE, props.level);
+   return (
+     <LessonPlayer
+       track="ai"
+-      pathLabel="AI Craft"
++      pathLabel={AI_COURSE.title}
+       pathHref="/learn/ai"
+       progressApi="/api/learn/ai/progress"
+       lessonHref={(slug) => `/learn/ai/${slug}`}
++      courseCode={AI_COURSE.code}
++      unitTitle={unit.title}
++      weekLabel={unit.week}
++      lectureLabel={lectureIndexLabel(props.sessionIndex, props.sessionTotal)}
+       {...props}
+     />
+   );
+diff --git a/src/components/learn/craft-path-client.tsx b/src/components/learn/craft-path-client.tsx
+index 56ad33c..402f6b5 100644
+--- a/src/components/learn/craft-path-client.tsx
++++ b/src/components/learn/craft-path-client.tsx
+@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+ import { cn } from "@/lib/utils";
+ import { LESSON_XP } from "@/server/learning/gamification";
++import type { CourseProfile } from "@/server/learning/course-syllabus";
+ 
+ type LessonRow = {
+   slug: string;
+@@ -19,16 +20,11 @@ type LessonRow = {
+   done: boolean;
+ };
+ 
+-type LevelDef = { id: string; label: string };
+-
+ export function CraftPathClient(props: {
+   track: "interview" | "ai";
+-  eyebrow: string;
+-  title: string;
+-  blurb: string;
++  course: CourseProfile;
+   progressApi: string;
+   lessonHref: (slug: string) => string;
+-  levels: LevelDef[];
+   secondaryCtas?: { href: string; label: string; variant?: "secondary" | "ghost" }[];
+ }) {
+   const [lessons, setLessons] = useState<LessonRow[]>([]);
+@@ -73,12 +69,18 @@ export function CraftPathClient(props: {
+     }
+   }
+ 
+-  const chapters = useMemo(() => {
+-    return props.levels.map((level) => {
+-      const rows = lessons.filter((l) => l.level === level.id);
++  const units = useMemo(() => {
++    let lectureNo = 0;
++    return props.course.units.map((unit) => {
++      const rows = lessons
++        .filter((l) => l.level === unit.id)
++        .map((l) => {
++          const globalIndex = lectureNo++;
++          return { ...l, globalIndex };
++        });
+       const done = rows.filter((l) => l.done).length;
+       return {
+-        ...level,
++        ...unit,
+         rows,
+         done,
+         total: rows.length,
+@@ -86,8 +88,10 @@ export function CraftPathClient(props: {
+         percent: rows.length ? Math.round((done / rows.length) * 100) : 0,
+       };
+     });
+-  }, [lessons, props.levels]);
++  }, [lessons, props.course.units]);
+ 
++  const totalLectures = lessons.length;
++  const doneLectures = lessons.filter((l) => l.done).length;
+   const accent =
+     props.track === "interview"
+       ? "border-orange-300/50 bg-orange-500/[0.07]"
+@@ -95,33 +99,44 @@ export function CraftPathClient(props: {
+ 
+   return (
+     <div className="animate-rise space-y-8">
+-      <header>
+-        <p className="font-mono text-xs tracking-[0.3em] text-orange-700">{props.eyebrow}</p>
+-        <h1 className="mt-2 font-serif-display text-2xl sm:text-3xl">{props.title}</h1>
+-        <p className="mt-2 max-w-2xl text-slate-600">{props.blurb}</p>
++      <header className="overflow-hidden rounded-2xl border border-slate-200 bg-[var(--surface-elevated)] p-5 sm:p-7">
++        <div className="flex flex-wrap gap-2">
++          <Badge variant="brand">{props.course.code}</Badge>
++          <Badge>{props.course.department}</Badge>
++          <Badge variant="amber">{props.course.credits} credits</Badge>
++          <Badge>{props.course.format}</Badge>
++        </div>
++        <p className="mt-4 font-mono text-xs tracking-[0.3em] text-orange-700">COURSE SYLLABUS</p>
++        <h1 className="mt-2 font-serif-display text-2xl sm:text-3xl">{props.course.title}</h1>
++        <p className="mt-2 max-w-2xl text-slate-600">{props.course.outcome}</p>
++        <p className="mt-3 text-sm text-slate-500">{props.course.term} · {totalLectures} lectures · +{LESSON_XP} XP each</p>
+       </header>
+ 
+       <section className={cn("rounded-2xl border p-5", accent)}>
+         <div className="flex flex-wrap items-end justify-between gap-3">
+           <div>
+-            <div className="text-xs uppercase tracking-wider text-orange-700/80">Path progress</div>
+-            <div className="mt-1 font-mono text-2xl text-orange-900">{percent}% complete</div>
+-            {next ? (
+-              <p className="mt-1 text-sm text-slate-600">
+-                Next: <span className="text-slate-800">{next.title}</span> · {next.minutes} min · +{LESSON_XP} XP
+-              </p>
+-            ) : (
+-              <p className="mt-1 text-sm text-emerald-800">Path complete — try a study plan or a timed mock.</p>
+-            )}
++            <div className="text-xs uppercase tracking-wider text-orange-700/80">Your enrollment</div>
++            <div className="mt-1 font-mono text-2xl text-orange-900">{percent}% through the term</div>
++            <p className="mt-1 text-sm text-slate-600">
++              {doneLectures}/{totalLectures} lectures attended
++              {next ? (
++                <>
++                  {" "}
++                  · Next class: <span className="text-slate-800">{next.title}</span> ({next.minutes} min)
++                </>
++              ) : (
++                " · Course complete"
++              )}
++            </p>
+           </div>
+           <div className="flex flex-wrap gap-2">
+             {next ? (
+               <Link href={props.lessonHref(next.slug)}>
+-                <Button disabled={busy}>Continue lesson</Button>
++                <Button disabled={busy}>Attend next class</Button>
+               </Link>
+             ) : (
+               <Button disabled={busy} onClick={() => void enrollAndGo()}>
+-                {busy ? "…" : "Start path"}
++                {busy ? "…" : doneLectures ? "Review syllabus" : "Enroll & start lecture 1"}
+               </Button>
+             )}
+             {(props.secondaryCtas ?? []).map((c) => (
+@@ -131,42 +146,43 @@ export function CraftPathClient(props: {
+             ))}
+           </div>
+         </div>
+-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/80">
++        <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white/80">
+           <div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${percent}%` }} />
+         </div>
+-        <div className="mt-4 flex flex-wrap gap-2">
+-          {chapters.map((ch) => (
+-            <span
+-              key={ch.id}
+-              className={cn(
+-                "rounded-md border px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider",
+-                ch.cleared
+-                  ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+-                  : "border-slate-200 bg-white/80 text-slate-600",
+-              )}
+-            >
+-              {ch.label} {ch.done}/{ch.total}
+-            </span>
++        <div className="mt-4 grid gap-2 sm:grid-cols-3">
++          {units.map((u) => (
++            <div key={u.id} className="rounded-xl border border-white/70 bg-white/75 px-3 py-2">
++              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">{u.week}</p>
++              <p className="mt-1 text-sm font-medium text-slate-900">{u.title.replace(/^Unit [^·]+ · /, "")}</p>
++              <p className="mt-1 font-mono text-[11px] text-slate-500">
++                {u.done}/{u.total} · {u.percent}%
++              </p>
++            </div>
+           ))}
+         </div>
+       </section>
+ 
+       {loading ? (
+-        <p className="text-slate-500">Loading curriculum…</p>
++        <p className="text-slate-500">Loading syllabus…</p>
+       ) : (
+-        chapters.map((ch) => {
+-          if (!ch.rows.length) return null;
++        units.map((unit) => {
++          if (!unit.rows.length) return null;
+           return (
+-            <section key={ch.id} className="space-y-3">
+-              <div className="flex flex-wrap items-center justify-between gap-2">
+-                <h2 className="font-serif-display text-lg text-slate-900">{ch.label}</h2>
+-                <Badge variant={ch.cleared ? "emerald" : "brand"}>
+-                  {ch.cleared ? "Done" : `${ch.percent}% · +${LESSON_XP} XP / lesson`}
++            <section key={unit.id} className="space-y-3">
++              <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200 pb-2">
++                <div>
++                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-orange-700/80">{unit.week}</p>
++                  <h2 className="mt-1 font-serif-display text-xl text-slate-900">{unit.title}</h2>
++                  <p className="mt-1 max-w-2xl text-sm text-slate-500">{unit.blurb}</p>
++                </div>
++                <Badge variant={unit.cleared ? "emerald" : "brand"}>
++                  {unit.cleared ? "Unit complete" : `${unit.done}/${unit.total} lectures`}
+                 </Badge>
+               </div>
+               <ol className="relative space-y-2 border-l border-orange-200 pl-4">
+-                {ch.rows.map((l, idx) => {
+-                  const locked = Boolean(next) && !l.done && next?.slug !== l.slug && idx > 0 && !ch.rows[idx - 1]?.done;
++                {unit.rows.map((l, idx) => {
++                  const priorDone = idx === 0 || unit.rows.slice(0, idx).every((r) => r.done);
++                  const locked = Boolean(next) && !l.done && next?.slug !== l.slug && !priorDone;
+                   return (
+                     <li key={l.slug} className="relative">
+                       <span
+@@ -180,7 +196,7 @@ export function CraftPathClient(props: {
+                         )}
+                       />
+                       <Link
+-                        href={props.lessonHref(l.slug)}
++                        href={locked ? props.lessonHref(next?.slug ?? l.slug) : props.lessonHref(l.slug)}
+                         className={cn(
+                           "flex flex-col gap-2 rounded-xl border px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between",
+                           l.done
+@@ -188,28 +204,25 @@ export function CraftPathClient(props: {
+                             : next?.slug === l.slug
+                               ? "border-orange-400 bg-orange-50/80 shadow-sm"
+                               : "border-slate-200 bg-white/80 hover:border-orange-300",
+-                          locked && "opacity-70",
++                          locked && "opacity-60",
+                         )}
+                       >
+                         <div className="min-w-0">
+                           <div className="flex flex-wrap items-center gap-2">
+                             <span className="font-mono text-[10px] text-slate-500">
+-                              {String(idx + 1).padStart(2, "0")}
++                              L{String(l.globalIndex + 1).padStart(2, "0")}
+                             </span>
+                             <span className="font-medium text-slate-900">{l.title}</span>
+-                            {l.done && <Badge variant="emerald">cleared</Badge>}
+-                            {next?.slug === l.slug && <Badge variant="amber">next</Badge>}
++                            {l.done && <Badge variant="emerald">attended</Badge>}
++                            {next?.slug === l.slug && <Badge variant="amber">today&apos;s class</Badge>}
++                            {locked && <Badge>catch up first</Badge>}
+                           </div>
+                           <p className="mt-1 text-sm text-slate-600">{l.summary}</p>
+                         </div>
+                         <div className="flex shrink-0 flex-wrap gap-1">
+                           <Badge>{l.minutes} min</Badge>
+                           <Badge variant="brand">+{LESSON_XP} XP</Badge>
+-                          {l.skills.slice(0, 2).map((s) => (
+-                            <Badge key={s} variant="brand">
+-                              {s}
+-                            </Badge>
+-                          ))}
++                          {l.practiceSlug && <Badge variant="amber">lab</Badge>}
+                         </div>
+                       </Link>
+                     </li>
+diff --git a/src/components/learn/interview-craft-client.tsx b/src/components/learn/interview-craft-client.tsx
+index ba18a92..cba7262 100644
+--- a/src/components/learn/interview-craft-client.tsx
++++ b/src/components/learn/interview-craft-client.tsx
+@@ -1,23 +1,17 @@
+ "use client";
+ 
+ import { CraftPathClient } from "@/components/learn/craft-path-client";
++import { INTERVIEW_COURSE } from "@/server/learning/course-syllabus";
+ 
+ export function InterviewCraftClient() {
+   return (
+     <CraftPathClient
+       track="interview"
+-      eyebrow="INTERVIEW CRAFT"
+-      title="Prepare for the real loop"
+-      blurb="Live coding framework, DSA patterns, system design, behavioral STAR. Each lesson earns XP; then practice under the same judges employers use."
++      course={INTERVIEW_COURSE}
+       progressApi="/api/learn/interview/progress"
+       lessonHref={(slug) => `/learn/interview/${slug}`}
+-      levels={[
+-        { id: "foundations", label: "Foundations" },
+-        { id: "patterns", label: "Patterns" },
+-        { id: "rounds", label: "Rounds" },
+-      ]}
+       secondaryCtas={[
+-        { href: "/study-plans", label: "Company packs", variant: "secondary" },
++        { href: "/study-plans", label: "All courses", variant: "secondary" },
+         { href: "/interview", label: "Timed mocks", variant: "ghost" },
+       ]}
+     />
+diff --git a/src/components/learn/interview-lesson-client.tsx b/src/components/learn/interview-lesson-client.tsx
+index 0cfe664..fee4011 100644
+--- a/src/components/learn/interview-lesson-client.tsx
++++ b/src/components/learn/interview-lesson-client.tsx
+@@ -1,6 +1,7 @@
+ "use client";
+ 
+ import { LessonPlayer } from "@/components/learn/lesson-player";
++import { INTERVIEW_COURSE, lectureIndexLabel, unitForLevel } from "@/server/learning/course-syllabus";
+ 
+ export function InterviewLessonClient(props: {
+   slug: string;
+@@ -14,14 +15,21 @@ export function InterviewLessonClient(props: {
+   done: boolean;
+   prevSlug: string | null;
+   nextSlug: string | null;
++  sessionIndex: number;
++  sessionTotal: number;
+ }) {
++  const unit = unitForLevel(INTERVIEW_COURSE, props.level);
+   return (
+     <LessonPlayer
+       track="interview"
+-      pathLabel="Interview Craft"
++      pathLabel={INTERVIEW_COURSE.title}
+       pathHref="/learn/interview"
+       progressApi="/api/learn/interview/progress"
+       lessonHref={(slug) => `/learn/interview/${slug}`}
++      courseCode={INTERVIEW_COURSE.code}
++      unitTitle={unit.title}
++      weekLabel={unit.week}
++      lectureLabel={lectureIndexLabel(props.sessionIndex, props.sessionTotal)}
+       {...props}
+     />
+   );
+diff --git a/src/components/learn/lesson-player.tsx b/src/components/learn/lesson-player.tsx
+index e7fd3af..5f37836 100644
+--- a/src/components/learn/lesson-player.tsx
++++ b/src/components/learn/lesson-player.tsx
+@@ -28,6 +28,12 @@ export function LessonPlayer(props: {
+   prevSlug: string | null;
+   nextSlug: string | null;
+   lessonHref: (slug: string) => string;
++  courseCode?: string;
++  unitTitle?: string;
++  weekLabel?: string;
++  lectureLabel?: string;
++  sessionIndex?: number;
++  sessionTotal?: number;
+ }) {
+   const router = useRouter();
+   const [done, setDone] = useState(props.done);
+@@ -44,13 +50,12 @@ export function LessonPlayer(props: {
+       });
+       const json = await res.json();
+       if (!json.ok) {
+-        // Guests can't persist — still celebrate and nudge account creation.
+         if (res.status === 401 || res.status === 403) {
+           markGuestProgress();
+           setDone(doneNext);
+           if (doneNext) {
+             setCelebration({ xp: LESSON_XP });
+-            toast.message("Lesson finished as guest — sign in to save XP");
++            toast.message("Class finished as guest — sign in to save progress");
+           }
+           return;
+         }
+@@ -60,14 +65,13 @@ export function LessonPlayer(props: {
+       const xp = Number(json.data?.xpEarned ?? 0);
+       if (doneNext && xp > 0) {
+         setCelebration({ xp });
+-        toast.success(`Lesson complete · +${xp} XP`);
++        toast.success(`Class complete · +${xp} XP`);
+       } else {
+-        toast.message(doneNext ? "Lesson marked complete" : "Marked incomplete");
++        toast.message(doneNext ? "Marked complete" : "Marked incomplete");
+         if (!doneNext) setCelebration(null);
+       }
+       if (doneNext) markGuestProgress();
+       if (doneNext && props.nextSlug) {
+-        // brief beat so celebration is visible
+         setTimeout(() => router.push(props.lessonHref(props.nextSlug!)), 700);
+       } else {
+         router.refresh();
+@@ -83,21 +87,51 @@ export function LessonPlayer(props: {
+     <div className="animate-rise mx-auto max-w-3xl space-y-6">
+       <div className="flex flex-wrap items-center gap-2 text-sm">
+         <Link href={props.pathHref} className="text-orange-700 hover:underline">
+-          ← {props.pathLabel}
++          ← {props.pathLabel} syllabus
+         </Link>
+-        <span className="text-slate-500">/</span>
+-        <span className="capitalize text-slate-500">{props.level}</span>
++        {props.courseCode && (
++          <>
++            <span className="text-slate-400">·</span>
++            <span className="font-mono text-xs tracking-wide text-slate-500">{props.courseCode}</span>
++          </>
++        )}
+       </div>
+ 
+-      <header>
++      <header className="overflow-hidden rounded-2xl border border-orange-200/70 bg-[linear-gradient(160deg,rgba(249,115,22,0.08),transparent_55%),var(--surface-elevated)] p-5 sm:p-6">
+         <div className="flex flex-wrap gap-2">
+-          <Badge variant="brand">{props.level}</Badge>
+-          <Badge>{props.minutes} min</Badge>
++          {props.weekLabel && <Badge variant="amber">{props.weekLabel}</Badge>}
++          {props.lectureLabel && <Badge variant="brand">{props.lectureLabel}</Badge>}
++          <Badge>{props.minutes} min class</Badge>
+           <Badge variant="amber">+{LESSON_XP} XP</Badge>
+-          {done && <Badge variant="emerald">done</Badge>}
++          {done && <Badge variant="emerald">attended</Badge>}
++        </div>
++        {props.unitTitle && (
++          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.22em] text-orange-800/80">
++            {props.unitTitle}
++          </p>
++        )}
++        <h1 className="mt-2 font-serif-display text-2xl sm:text-3xl">{props.title}</h1>
++        <p className="mt-2 max-w-2xl text-slate-600">{props.summary}</p>
++        <div className="mt-4 grid gap-3 sm:grid-cols-3">
++          <div className="rounded-xl border border-white/70 bg-white/70 px-3 py-2">
++            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Agenda</p>
++            <p className="mt-1 text-sm text-slate-800">Read the lecture, then finish the check</p>
++          </div>
++          <div className="rounded-xl border border-white/70 bg-white/70 px-3 py-2">
++            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Lab</p>
++            <p className="mt-1 text-sm text-slate-800">
++              {props.practiceSlug ? "Practice problem linked below" : "Reflection + next lecture"}
++            </p>
++          </div>
++          <div className="rounded-xl border border-white/70 bg-white/70 px-3 py-2">
++            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">Session</p>
++            <p className="mt-1 text-sm text-slate-800">
++              {props.sessionIndex != null && props.sessionTotal
++                ? `${props.sessionIndex + 1} / ${props.sessionTotal}`
++                : "Self-paced"}
++            </p>
++          </div>
+         </div>
+-        <h1 className="mt-3 font-serif-display text-2xl sm:text-3xl">{props.title}</h1>
+-        <p className="mt-2 text-slate-600">{props.summary}</p>
+         <div className="mt-3 flex flex-wrap gap-1">
+           {props.skills.map((s) => (
+             <Badge key={s} variant="brand">
+@@ -111,54 +145,65 @@ export function LessonPlayer(props: {
+         <div className="relative overflow-hidden rounded-2xl border border-amber-300 bg-[var(--surface-elevated)] p-5">
+           <XpBurst amount={celebration.xp} active />
+           <div className="relative">
+-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-amber-800">Lesson complete</p>
++            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-amber-800">Class dismissed</p>
+             <p className="mt-1 text-3xl font-semibold tracking-[-0.03em] text-slate-900">+{celebration.xp} XP</p>
+             <p className="mt-2 text-sm text-slate-600">
+-              {props.nextSlug ? "Loading the next lesson…" : "That was the last lesson on this path."}
++              {props.nextSlug ? "Walking you to the next lecture…" : "That was the last lecture in this course."}
+             </p>
+           </div>
+         </div>
+       )}
+ 
+-      <article className="rounded-2xl border border-slate-200 bg-white/80 p-5 sm:p-6">
++      <article className="rounded-2xl border border-slate-200 bg-white/85 p-5 sm:p-7 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
++        <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">Lecture notes</p>
+         <LessonBody md={props.bodyMd} />
+       </article>
+ 
+-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+-        {!done ? (
+-          <Button disabled={busy} onClick={() => void mark(true)}>
+-            Mark complete (+{LESSON_XP} XP){props.nextSlug ? " & continue" : ""}
+-          </Button>
+-        ) : (
+-          <Button variant="secondary" disabled={busy} onClick={() => void mark(false)}>
+-            Mark incomplete
+-          </Button>
+-        )}
+-        {props.practiceSlug && (
+-          <Link href={`/challenges?q=${encodeURIComponent(props.practiceSlug)}`}>
+-            <Button variant="secondary">Practice in problem bank</Button>
+-          </Link>
+-        )}
+-        <Link href="/learn">
+-          <Button variant="ghost">Learn hub →</Button>
+-        </Link>
+-      </div>
++      <section className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
++        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">End of class</p>
++        <p className="mt-1 text-sm text-slate-600">
++          Mark attendance when you finish the notes
++          {props.practiceSlug ? ", then run the lab problem" : ""}. Completing advances you through the syllabus in
++          order.
++        </p>
++        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
++          {!done ? (
++            <Button disabled={busy} onClick={() => void mark(true)}>
++              Finish class (+{LESSON_XP} XP){props.nextSlug ? " → next lecture" : ""}
++            </Button>
++          ) : (
++            <Button variant="secondary" disabled={busy} onClick={() => void mark(false)}>
++              Undo attendance
++            </Button>
++          )}
++          {props.practiceSlug && (
++            <Link href={`/challenges?q=${encodeURIComponent(props.practiceSlug)}`}>
++              <Button variant="secondary">Open lab problem</Button>
++            </Link>
++          )}
++          {props.practiceSlug && (
++            <Link href={`/flashcards/${props.practiceSlug}`}>
++              <Button variant="ghost">Flash cards for lab →</Button>
++            </Link>
++          )}
++        </div>
++      </section>
+ 
+       <nav className="flex justify-between gap-3 border-t border-slate-200 pt-4 text-sm">
+         {props.prevSlug ? (
+           <Link href={props.lessonHref(props.prevSlug)} className="text-slate-600 hover:text-orange-800">
+-            ← Previous
++            ← Previous lecture
+           </Link>
+         ) : (
+           <span />
+         )}
+         {props.nextSlug ? (
+           <Link href={props.lessonHref(props.nextSlug)} className="text-orange-700 hover:underline">
+-            Next →
++            Next lecture →
+           </Link>
+         ) : (
+           <Link href={props.pathHref} className="text-orange-700 hover:underline">
+-            Back to path →
++            Back to syllabus →
+           </Link>
+         )}
+       </nav>
+diff --git a/src/components/saas/study-plans-client.tsx b/src/components/saas/study-plans-client.tsx
+index f5311e3..96d9a32 100644
+--- a/src/components/saas/study-plans-client.tsx
++++ b/src/components/saas/study-plans-client.tsx
+@@ -7,6 +7,7 @@ import { toast } from "sonner";
+ import { Badge } from "@/components/ui/badge";
+ import { Button } from "@/components/ui/button";
+ import { cn } from "@/lib/utils";
++import { courseProfileForPlan } from "@/server/learning/course-syllabus";
+ 
+ type PlanItem = {
+   id: string;
+@@ -17,6 +18,7 @@ type PlanItem = {
+   done: boolean;
+   href?: string;
+   xp?: number;
++  level?: string;
+ };
+ 
+ type Plan = {
+@@ -58,7 +60,7 @@ function diffLabel(d: number) {
+ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premium: boolean }) {
+   const router = useRouter();
+   const [busy, setBusy] = useState<string | null>(null);
+-  const [filter, setFilter] = useState<"all" | "active" | "company" | "free">("all");
++  const [filter, setFilter] = useState<"all" | "active" | "courses" | "labs" | "free">("all");
+   const defaultOpen = props.summary.activeSlug ?? props.plans.find((p) => p.enrolled)?.slug ?? props.plans[0]?.slug ?? null;
+   const [open, setOpen] = useState<string | null>(defaultOpen);
+ 
+@@ -70,17 +72,19 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+   const filtered = useMemo(() => {
+     return props.plans.filter((p) => {
+       if (filter === "active") return p.enrolled && !p.complete;
+-      if (filter === "company") return Boolean(p.company);
++      if (filter === "courses") return p.itemKind === "lesson";
++      if (filter === "labs") return p.itemKind !== "lesson";
+       if (filter === "free") return !p.premium;
+       return true;
+     });
+   }, [props.plans, filter]);
+ 
+   const nextActiveItem = active?.items.find((i) => i.slug === active.nextItemSlug);
++  const activeCourse = active ? courseProfileForPlan(active.slug) : null;
+ 
+   async function enroll(planSlug: string, requiresPremium: boolean) {
+     if (requiresPremium && !props.premium) {
+-      toast.error("Premium study plan");
++      toast.error("Premium course");
+       router.push("/pricing");
+       return;
+     }
+@@ -93,7 +97,7 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+       });
+       const json = await res.json();
+       if (!json.ok) throw new Error(json.error?.message || "Enroll failed");
+-      toast.success("Plan started — open the first problem");
++      toast.success("Enrolled — open lecture 1 or the first lab");
+       setOpen(planSlug);
+       router.refresh();
+     } catch (e) {
+@@ -114,11 +118,8 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+       const json = await res.json();
+       if (!json.ok) throw new Error(json.error?.message || "Update failed");
+       const xp = Number(json.data?.xpEarned ?? 0);
+-      if (!done && xp > 0) {
+-        toast.success(`Marked done · +${xp} XP`);
+-      } else {
+-        toast.message(done ? "Marked incomplete" : "Updated");
+-      }
++      if (!done && xp > 0) toast.success(`Marked done · +${xp} XP`);
++      else toast.message(done ? "Marked incomplete" : "Updated");
+       router.refresh();
+     } catch (e) {
+       toast.error(e instanceof Error ? e.message : "Update failed");
+@@ -132,15 +133,16 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+       <header className="space-y-4">
+         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+           <div>
+-            <p className="font-mono text-xs tracking-[0.3em] text-orange-700">STUDY PLANS</p>
+-            <h1 className="mt-2 font-serif-display text-2xl sm:text-3xl">Curated problem lists</h1>
++            <p className="font-mono text-xs tracking-[0.3em] text-orange-700">COURSE CATALOG</p>
++            <h1 className="mt-2 font-serif-display text-2xl sm:text-3xl">Study plane · college-style paths</h1>
+             <p className="mt-2 max-w-2xl text-slate-600">
+-              Problem sets grouped by company or role, ordered from warm-up to hard. Every problem you solve earns XP.
++              Enroll in a course, work the syllabus in order, and finish every lecture and lab — like a real term, not a
++              random problem dump.
+             </p>
+           </div>
+           {!props.premium && (
+             <Link href="/pricing">
+-              <Button variant="secondary">Unlock Premium plans</Button>
++              <Button variant="secondary">Unlock Premium courses</Button>
+             </Link>
+           )}
+         </div>
+@@ -148,16 +150,17 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+         <section className="overflow-hidden rounded-2xl border border-orange-300/60 bg-[var(--surface-elevated)] p-5 sm:p-6">
+           <div className="flex flex-wrap items-end justify-between gap-4">
+             <div>
+-              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-orange-700/80">Study plan XP</p>
++              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-orange-700/80">Term progress</p>
+               <p className="mt-1 font-serif-display text-3xl text-slate-900 sm:text-4xl">
+-                {props.summary.totalEarnedXp.toLocaleString()}
++                {props.summary.totalEarnedXp.toLocaleString()} XP
+               </p>
+               <p className="mt-1 font-mono text-sm text-slate-600">
+-                {props.summary.enrolledCount} started · {props.summary.completedPlans} finished
++                {props.summary.enrolledCount} enrolled · {props.summary.completedPlans} courses finished
+               </p>
+             </div>
+             {active && (
+               <div className="flex flex-wrap gap-2">
++                {activeCourse && <Badge variant="brand">{activeCourse.code}</Badge>}
+                 <Badge variant="amber">{active.title}</Badge>
+               </div>
+             )}
+@@ -166,15 +169,17 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+           <div className="mt-5 rounded-xl border border-slate-200/80 bg-white/70 p-4">
+             <div className="flex flex-wrap items-center justify-between gap-2">
+               <div>
+-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">Up next</p>
++                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">Up next in class</p>
+                 <h2 className="mt-1 text-lg font-medium text-slate-900">{props.summary.next.title}</h2>
+                 <p className="mt-1 text-sm text-slate-500">{props.summary.next.detail}</p>
+               </div>
+             </div>
+             <div className="mt-4 flex flex-wrap gap-2">
+               {nextActiveItem ? (
+-                <Link href={nextActiveItem.href ?? "/challenges"}>
+-                  <Button>Continue: {nextActiveItem.title}</Button>
++                <Link href={nextActiveItem.href ?? "/learn"}>
++                  <Button>
++                    {active?.itemKind === "lesson" ? "Attend class" : "Open lab"}: {nextActiveItem.title}
++                  </Button>
+                 </Link>
+               ) : active ? (
+                 <Button
+@@ -183,13 +188,11 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                     document.getElementById(`plan-${active.slug}`)?.scrollIntoView({ behavior: "smooth" });
+                   }}
+                 >
+-                  Open {active.title}
++                  Open {active.title} syllabus
+                 </Button>
+               ) : (
+-                <Button
+-                  onClick={() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" })}
+-                >
+-                  Browse plans
++                <Button onClick={() => document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" })}>
++                  Browse catalog
+                 </Button>
+               )}
+               {active && (
+@@ -200,14 +203,17 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                     document.getElementById(`plan-${active.slug}`)?.scrollIntoView({ behavior: "smooth" });
+                   }}
+                 >
+-                  Show problems
++                  Show syllabus
+                 </Button>
+               )}
+             </div>
+             {active && (
+               <div className="mt-4">
+                 <div className="mb-1 flex justify-between font-mono text-[10px] uppercase tracking-wider text-slate-500">
+-                  <span>{active.completedCount}/{active.totalCount} problems</span>
++                  <span>
++                    {active.completedCount}/{active.totalCount}{" "}
++                    {active.itemKind === "lesson" ? "lectures" : "labs"}
++                  </span>
+                   <span>
+                     {active.earnedXp}/{active.totalXp} XP
+                   </span>
+@@ -227,15 +233,18 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+       <section id="catalog" className="space-y-4">
+         <div className="flex flex-wrap items-end justify-between gap-3">
+           <div>
+-            <h2 className="font-serif-display text-xl text-slate-900">All plans</h2>
+-            <p className="mt-1 text-sm text-slate-500">Start a plan to track progress through it.</p>
++            <h2 className="font-serif-display text-xl text-slate-900">Catalog</h2>
++            <p className="mt-1 text-sm text-slate-500">
++              Lecture courses first, then company practicums — finish each syllabus in order.
++            </p>
+           </div>
+           <div className="flex flex-wrap gap-1.5">
+             {(
+               [
+                 ["all", "All"],
+-                ["active", "In progress"],
+-                ["company", "Companies"],
++                ["active", "In term"],
++                ["courses", "Lecture courses"],
++                ["labs", "Practicums"],
+                 ["free", "Free"],
+               ] as const
+             ).map(([id, label]) => (
+@@ -260,6 +269,8 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+           {filtered.map((plan) => {
+             const isOpen = open === plan.slug;
+             const next = plan.items.find((i) => i.slug === plan.nextItemSlug);
++            const course = courseProfileForPlan(plan.slug);
++            const isCourse = plan.itemKind === "lesson";
+             return (
+               <article
+                 key={plan.slug}
+@@ -274,24 +285,51 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                 )}
+               >
+                 <div className="flex flex-wrap gap-2">
+-                  {plan.track === "ai" && <Badge variant="brand">AI</Badge>}
+-                  {plan.track === "interview" && plan.itemKind === "lesson" && (
+-                    <Badge variant="brand">Interview</Badge>
++                  {course && <Badge variant="brand">{course.code}</Badge>}
++                  {isCourse ? (
++                    <Badge variant="brand">Lecture course</Badge>
++                  ) : (
++                    <Badge>Practicum</Badge>
+                   )}
+-                  {plan.track === "security" && <Badge variant="rose">Security</Badge>}
+                   {plan.company && <Badge variant="brand">{plan.company}</Badge>}
+                   <Badge>{plan.role}</Badge>
+-                  <Badge variant="amber">{plan.days}d</Badge>
++                  <Badge variant="amber">{plan.days}-day term</Badge>
++                  {course && <Badge>{course.credits} cr</Badge>}
+                   {plan.premium && <Badge variant="amber">Premium</Badge>}
+-                  {plan.complete && <Badge variant="emerald">Finished</Badge>}
++                  {plan.complete && <Badge variant="emerald">Passed</Badge>}
+                 </div>
+                 <h3 className="mt-3 font-serif-display text-xl text-slate-900">{plan.title}</h3>
+-                <p className="mt-1 text-sm text-slate-600">{plan.subtitle}</p>
++                <p className="mt-1 text-sm text-slate-600">
++                  {course?.outcome ?? plan.subtitle}
++                </p>
++
++                {course && (
++                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
++                    {course.units.map((u) => {
++                      const unitItems = plan.items.filter((i) => i.level === u.id);
++                      const unitDone = unitItems.filter((i) => i.done).length;
++                      const total = unitItems.length || 0;
++                      return (
++                        <div key={u.id} className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2">
++                          <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-slate-500">{u.week}</p>
++                          <p className="mt-0.5 text-xs font-medium text-slate-800">
++                            {u.title.replace(/^Unit [^·]+ · /, "")}
++                          </p>
++                          {total > 0 && (
++                            <p className="mt-1 font-mono text-[10px] text-slate-500">
++                              {unitDone}/{total}
++                            </p>
++                          )}
++                        </div>
++                      );
++                    })}
++                  </div>
++                )}
+ 
+                 <div className="mt-4">
+                   <div className="mb-1 flex justify-between font-mono text-[11px] text-slate-500">
+                     <span>
+-                      {plan.completedCount}/{plan.totalCount} done
++                      {plan.completedCount}/{plan.totalCount} {isCourse ? "lectures" : "labs"}
+                     </span>
+                     <span>
+                       {plan.earnedXp}/{plan.totalXp} XP
+@@ -311,29 +349,26 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                 <div className="mt-4 flex flex-wrap gap-2">
+                   {!plan.enrolled ? (
+                     <Button disabled={busy === plan.slug} onClick={() => void enroll(plan.slug, plan.premium)}>
+-                      {busy === plan.slug ? "Starting…" : "Start plan"}
++                      {busy === plan.slug ? "Enrolling…" : isCourse ? "Enroll in course" : "Start practicum"}
+                     </Button>
+                   ) : (
+                     <>
+                       {next?.href && (
+                         <Link href={next.href}>
+-                          <Button>Next problem</Button>
++                          <Button>{isCourse ? "Attend next class" : "Next lab"}</Button>
+                         </Link>
+                       )}
+-                      <Button
+-                        variant="secondary"
+-                        onClick={() => setOpen(isOpen ? null : plan.slug)}
+-                      >
+-                        {isOpen ? "Hide problems" : "Show problems"}
++                      <Button variant="secondary" onClick={() => setOpen(isOpen ? null : plan.slug)}>
++                        {isOpen ? "Hide syllabus" : "Show syllabus"}
+                       </Button>
+                       {plan.slug === "ai-craft" && (
+                         <Link href="/learn/ai">
+-                          <Button variant="ghost">AI Craft path →</Button>
++                          <Button variant="ghost">Full AI syllabus →</Button>
+                         </Link>
+                       )}
+                       {plan.slug === "interview-craft" && (
+                         <Link href="/learn/interview">
+-                          <Button variant="ghost">Interview path →</Button>
++                          <Button variant="ghost">Full interview syllabus →</Button>
+                         </Link>
+                       )}
+                     </>
+@@ -343,6 +378,8 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                 {plan.enrolled && isOpen && (
+                   <ul className="mt-4 space-y-2">
+                     {plan.items.map((item, idx) => {
++                      const priorIncomplete = plan.items.slice(0, idx).some((i) => !i.done);
++                      const isNext = item.slug === plan.nextItemSlug;
+                       return (
+                         <li key={item.slug}>
+                           <div
+@@ -350,18 +387,19 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                               "flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm",
+                               item.done
+                                 ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+-                                : item.slug === plan.nextItemSlug
++                                : isNext
+                                   ? "border-orange-400/50 bg-orange-500/[0.05]"
+                                   : "border-slate-200",
+                             )}
+                           >
+                             <div className="min-w-0">
+                               <div className="truncate font-medium text-slate-900">
+-                                {idx + 1}. {item.title}
++                                {isCourse ? `L${String(idx + 1).padStart(2, "0")}` : `${idx + 1}.`} {item.title}
+                               </div>
+                               <div className="font-mono text-[11px] text-slate-500">
+-                                {plan.itemKind === "lesson" ? "Lesson" : diffLabel(item.difficulty)} ·{" "}
+-                                {item.avgMinutes ?? 30}m · +{item.xp ?? 40} XP
++                                {isCourse ? "Lecture" : diffLabel(item.difficulty)} · {item.avgMinutes ?? 30}m · +
++                                {item.xp ?? 40} XP
++                                {priorIncomplete && !item.done && !isNext ? " · catch up earlier sessions" : ""}
+                               </div>
+                             </div>
+                             <div className="flex shrink-0 items-center gap-2">
+@@ -378,8 +416,11 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+                               >
+                                 {item.done ? "Done" : "Mark done"}
+                               </button>
+-                              <Link href={item.href ?? "/challenges"} className="text-xs text-orange-700 hover:underline">
+-                                Open
++                              <Link
++                                href={item.href ?? "/learn"}
++                                className="text-xs text-orange-700 hover:underline"
++                              >
++                                {isCourse ? "Class" : "Lab"}
+                               </Link>
+                             </div>
+                           </div>
+@@ -393,7 +434,7 @@ export function StudyPlansClient(props: { plans: Plan[]; summary: Summary; premi
+           })}
+         </div>
+         {!filtered.length && (
+-          <p className="py-10 text-center text-sm text-slate-500">No plans match this filter.</p>
++          <p className="py-10 text-center text-sm text-slate-500">No courses match this filter.</p>
+         )}
+       </section>
+     </div>
+diff --git a/src/server/learning/course-syllabus.ts b/src/server/learning/course-syllabus.ts
+new file mode 100644
+index 0000000..354c773
+--- /dev/null
++++ b/src/server/learning/course-syllabus.ts
+@@ -0,0 +1,105 @@
++/**
++ * College-course framing for lesson tracks and study plans.
++ * Turns sequenced lessons into units, weeks, and lecture sessions.
++ */
++
++export type CourseUnitDef = {
++  id: string;
++  week: string;
++  title: string;
++  blurb: string;
++};
++
++export type CourseProfile = {
++  code: string;
++  title: string;
++  department: string;
++  term: string;
++  credits: number;
++  format: string;
++  outcome: string;
++  units: CourseUnitDef[];
++};
++
++export const INTERVIEW_COURSE: CourseProfile = {
++  code: "CRUC-201",
++  title: "Interview Craft",
++  department: "Software Engineering",
++  term: "Full term · self-paced",
++  credits: 3,
++  format: "Lecture + lab",
++  outcome: "Walk a real interview loop with a repeatable process — coding, design, and behavioral.",
++  units: [
++    {
++      id: "foundations",
++      week: "Weeks 1–2",
++      title: "Unit I · Foundations",
++      blurb: "How loops work, the live-coding framework, and complexity you can say out loud.",
++    },
++    {
++      id: "patterns",
++      week: "Weeks 3–4",
++      title: "Unit II · Patterns",
++      blurb: "The DSA patterns that show up most — then drill them under a clock.",
++    },
++    {
++      id: "rounds",
++      week: "Weeks 5–6",
++      title: "Unit III · Rounds",
++      blurb: "System design, behavioral STAR, and offer-day judgment.",
++    },
++  ],
++};
++
++export const AI_COURSE: CourseProfile = {
++  code: "CRUC-310",
++  title: "AI Craft",
++  department: "Applied AI",
++  term: "Full term · self-paced",
++  credits: 4,
++  format: "Lecture + studio",
++  outcome: "Ship LLM features with prompts, tools, retrieval, evals, and safety — not vibes.",
++  units: [
++    {
++      id: "foundations",
++      week: "Weeks 1–2",
++      title: "Unit I · Foundations",
++      blurb: "Context windows, prompting, and message roles that survive production.",
++    },
++    {
++      id: "builder",
++      week: "Weeks 3–5",
++      title: "Unit II · Builder",
++      blurb: "Structured output, APIs, tools, and retrieval you can wire into an app.",
++    },
++    {
++      id: "production",
++      week: "Weeks 6–8",
++      title: "Unit III · Production",
++      blurb: "Agents, evals, safety, cost, and failure modes before you ship.",
++    },
++  ],
++};
++
++export function courseProfileForPlan(slug: string): CourseProfile | null {
++  if (slug === "interview-craft") return INTERVIEW_COURSE;
++  if (slug === "ai-craft") return AI_COURSE;
++  return null;
++}
++
++export function courseProfileForTrack(track: "interview" | "ai"): CourseProfile {
++  return track === "interview" ? INTERVIEW_COURSE : AI_COURSE;
++}
++
++export function creditsFromMinutes(totalMinutes: number) {
++  // ~45 min ≈ 1 credit-hour feel for self-paced courses
++  return Math.max(1, Math.round(totalMinutes / 45));
++}
++
++export function lectureIndexLabel(index: number, total: number) {
++  return `Lecture ${index + 1} of ${total}`;
++}
++
++export function unitForLevel(profile: CourseProfile, level: string) {
++  return profile.units.find((u) => u.id === level) ?? profile.units[0]!;
++}
+-- 
+2.43.0
+
