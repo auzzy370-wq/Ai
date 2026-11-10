@@ -69,3 +69,6 @@ Apply `crucible-seo-boost.patch`: metadataBase/OG/Twitter, robots+sitemap, JSON-
 ## Pro accessible + value loop (2026-11-10)
 Apply `crucible-pro-accessible.patch`: $15/mo · $99/yr, no sprint; Prep nav; auth ?next= resume; post-Accepted CTAs; company mock upgrade copy.
 
+## Flash cards (2026-11-10)
+Apply `crucible-flashcards.patch`: free decks per published challenge + lesson fallbacks; /flashcards hub; guest access; nav + practice wiring.
+

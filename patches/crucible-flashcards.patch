@@ -1,0 +1,859 @@
+From ad3c25a48b3121bd36e09f0bcdaf77a7521b7373 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 10 Nov 2026 20:10:28 +0000
+Subject: [PATCH] Add free flash cards for every published challenge
+
+Generate per-problem decks (prompt, patterns, edges, company cues),
+guest-accessible /flashcards hub + deck pages, and wire them into
+Learn, Practice, challenge pages, and post-Accepted next steps.
+---
+ src/app/(app)/challenges/[slug]/page.tsx   |   3 +
+ src/app/(app)/flashcards/[slug]/page.tsx   |  94 ++++++++
+ src/app/(app)/flashcards/page.tsx          |  52 +++++
+ src/app/(app)/learn/page.tsx               |   8 +-
+ src/app/robots.ts                          |  13 +-
+ src/app/sitemap.ts                         |   7 +
+ src/components/challenges/problemset.tsx   |   6 +
+ src/components/layout/app-shell.tsx        |   8 +-
+ src/components/learn/flashcards-client.tsx | 251 +++++++++++++++++++++
+ src/components/workspace/ide.tsx           |   8 +
+ src/lib/access.ts                          |   2 +-
+ src/server/learning/flashcards.ts          | 236 +++++++++++++++++++
+ 12 files changed, 683 insertions(+), 5 deletions(-)
+ create mode 100644 src/app/(app)/flashcards/[slug]/page.tsx
+ create mode 100644 src/app/(app)/flashcards/page.tsx
+ create mode 100644 src/components/learn/flashcards-client.tsx
+ create mode 100644 src/server/learning/flashcards.ts
+
+diff --git a/src/app/(app)/challenges/[slug]/page.tsx b/src/app/(app)/challenges/[slug]/page.tsx
+index 18a35da..d4f5bd2 100644
+--- a/src/app/(app)/challenges/[slug]/page.tsx
++++ b/src/app/(app)/challenges/[slug]/page.tsx
+@@ -168,6 +168,9 @@ export default async function ChallengeSeoPage({ params }: { params: Promise<{ s
+             </Link>
+           </>
+         )}
++        <Link href={`/flashcards/${challenge.slug}`}>
++          <Button variant="secondary">Flash cards</Button>
++        </Link>
+         <Link href="/jobs">
+           <Button variant="outline">See related jobs</Button>
+         </Link>
+diff --git a/src/app/(app)/flashcards/[slug]/page.tsx b/src/app/(app)/flashcards/[slug]/page.tsx
+new file mode 100644
+index 0000000..b158fc3
+--- /dev/null
++++ b/src/app/(app)/flashcards/[slug]/page.tsx
+@@ -0,0 +1,94 @@
++import type { Metadata } from "next";
++import { notFound } from "next/navigation";
++import { CANDIDATE_ROLES } from "@/lib/access";
++import { prisma } from "@/lib/db";
++import { pageMetadata } from "@/lib/seo";
++import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
++import { buildChallengeFlashCards, buildLessonFlashCards } from "@/server/learning/flashcards";
++import { FlashcardsClient } from "@/components/learn/flashcards-client";
++import { INTERVIEW_LESSONS } from "@/server/learning/interview-curriculum";
++import { AI_LESSONS } from "@/server/learning/ai-curriculum";
++
++export const dynamic = "force-dynamic";
++
++export async function generateMetadata({
++  params,
++}: {
++  params: Promise<{ slug: string }>;
++}): Promise<Metadata> {
++  const { slug } = await params;
++  const challenge = await prisma.challenge
++    .findFirst({ where: { slug, isPublished: true }, select: { title: true, summary: true } })
++    .catch(() => null);
++  if (challenge) {
++    return pageMetadata({
++      title: `${challenge.title} flash cards`,
++      description: challenge.summary || `Drill patterns and edges for ${challenge.title}.`,
++      path: `/flashcards/${slug}`,
++      keywords: [challenge.title, "flash cards", "interview drill"],
++    });
++  }
++  const lesson =
++    INTERVIEW_LESSONS.find((l) => l.slug === slug) || AI_LESSONS.find((l) => l.slug === slug);
++  if (lesson) {
++    return pageMetadata({
++      title: `${lesson.title} flash cards`,
++      description: lesson.summary,
++      path: `/flashcards/${slug}`,
++    });
++  }
++  return pageMetadata({
++    title: "Flash cards",
++    description: "Practice deck",
++    path: `/flashcards/${slug}`,
++    noIndex: true,
++  });
++}
++
++export default async function FlashcardDeckPage({ params }: { params: Promise<{ slug: string }> }) {
++  const { slug } = await params;
++  await requirePageRolesOrGuest("/flashcards", [...CANDIDATE_ROLES, "SUPER_ADMIN", "HIRING_MANAGER", "TECHNICAL_REVIEWER"]);
++
++  const challenge = await prisma.challenge.findFirst({
++    where: { slug, isPublished: true },
++    select: {
++      slug: true,
++      title: true,
++      summary: true,
++      description: true,
++      tags: true,
++      companies: true,
++      publicRequirements: true,
++      hiddenRequirements: true,
++      hints: true,
++      adaptiveTrack: true,
++    },
++  });
++
++  if (challenge) {
++    const cards = buildChallengeFlashCards(challenge);
++    return (
++      <FlashcardsClient
++        slug={challenge.slug}
++        title={challenge.title}
++        summary={challenge.summary}
++        cards={cards}
++        challengeHref={`/challenges/${challenge.slug}`}
++      />
++    );
++  }
++
++  const lesson =
++    INTERVIEW_LESSONS.find((l) => l.slug === slug) || AI_LESSONS.find((l) => l.slug === slug);
++  if (!lesson) notFound();
++
++  return (
++    <FlashcardsClient
++      slug={lesson.slug}
++      title={lesson.title}
++      summary={lesson.summary}
++      cards={buildLessonFlashCards(lesson)}
++      challengeHref={lesson.practiceSlug ? `/challenges/${lesson.practiceSlug}` : "/learn"}
++    />
++  );
++}
+diff --git a/src/app/(app)/flashcards/page.tsx b/src/app/(app)/flashcards/page.tsx
+new file mode 100644
+index 0000000..778117f
+--- /dev/null
++++ b/src/app/(app)/flashcards/page.tsx
+@@ -0,0 +1,52 @@
++import type { Metadata } from "next";
++import { pageMetadata } from "@/lib/seo";
++import { prisma } from "@/lib/db";
++import { requirePageRolesOrGuest } from "@/server/auth/page-guard";
++import { CANDIDATE_ROLES } from "@/lib/access";
++import { buildChallengeFlashCards } from "@/server/learning/flashcards";
++import { FlashcardsHubClient } from "@/components/learn/flashcards-client";
++
++export const metadata: Metadata = pageMetadata({
++  title: "Flash cards for coding interview problems",
++  description:
++    "Free flash card decks for every published practice problem — prompts, patterns, hidden edges, and company cues.",
++  path: "/flashcards",
++  keywords: ["coding flash cards", "interview drill cards", "algorithm patterns", "leetcode flashcards"],
++});
++
++export const dynamic = "force-dynamic";
++
++export default async function FlashcardsHubPage() {
++  await requirePageRolesOrGuest("/flashcards", [...CANDIDATE_ROLES, "SUPER_ADMIN", "HIRING_MANAGER", "TECHNICAL_REVIEWER"]);
++
++  const challenges = await prisma.challenge.findMany({
++    where: { isPublished: true },
++    select: {
++      slug: true,
++      title: true,
++      summary: true,
++      difficulty: true,
++      tags: true,
++      companies: true,
++      publicRequirements: true,
++      hiddenRequirements: true,
++      hints: true,
++      adaptiveTrack: true,
++      description: true,
++      frequency: true,
++    },
++    orderBy: [{ frequency: "desc" }, { updatedAt: "desc" }],
++    take: 240,
++  });
++
++  const decks = challenges.map((c) => ({
++    slug: c.slug,
++    title: c.title,
++    summary: c.summary,
++    difficulty: c.difficulty,
++    tags: c.tags,
++    cardCount: buildChallengeFlashCards(c).length,
++  }));
++
++  return <FlashcardsHubClient decks={decks} />;
++}
+diff --git a/src/app/(app)/learn/page.tsx b/src/app/(app)/learn/page.tsx
+index aa44cfb..335604e 100644
+--- a/src/app/(app)/learn/page.tsx
++++ b/src/app/(app)/learn/page.tsx
+@@ -139,13 +139,19 @@ export default async function LearnHubPage() {
+ 
+       <section className="space-y-3">
+         <h2 className="text-xl font-semibold tracking-[-0.02em] text-slate-900">Practice</h2>
+-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
++        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+           <PracticeCard
+             title="Problem bank"
+             body="Coding and mission problems with public + hidden tests."
+             href="/challenges"
+             cta="Browse problems"
+           />
++          <PracticeCard
++            title="Flash cards"
++            body="Drill each problem’s prompt, patterns, and edges before you code."
++            href="/flashcards"
++            cta="Study decks"
++          />
+           {user ? (
+             <PracticeCard
+               title="Mock interviews"
+diff --git a/src/app/robots.ts b/src/app/robots.ts
+index 2f5e57d..c4b4631 100644
+--- a/src/app/robots.ts
++++ b/src/app/robots.ts
+@@ -7,7 +7,18 @@ export default function robots(): MetadataRoute.Robots {
+     rules: [
+       {
+         userAgent: "*",
+-        allow: ["/", "/learn", "/challenges", "/challenges/", "/jobs", "/security", "/pricing", "/u/"],
++        allow: [
++          "/",
++          "/learn",
++          "/challenges",
++          "/challenges/",
++          "/flashcards",
++          "/flashcards/",
++          "/jobs",
++          "/security",
++          "/pricing",
++          "/u/",
++        ],
+         disallow: [
+           "/api/",
+           "/admin/",
+diff --git a/src/app/sitemap.ts b/src/app/sitemap.ts
+index b91ec35..00c49eb 100644
+--- a/src/app/sitemap.ts
++++ b/src/app/sitemap.ts
+@@ -16,6 +16,7 @@ const STATIC: {
+   { path: "/jobs", changeFrequency: "hourly", priority: 0.9 },
+   { path: "/security", changeFrequency: "monthly", priority: 0.45 },
+   { path: "/pricing", changeFrequency: "monthly", priority: 0.7 },
++  { path: "/flashcards", changeFrequency: "daily", priority: 0.85 },
+ ];
+ 
+ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+@@ -60,6 +61,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+         changeFrequency: "weekly",
+         priority: 0.72,
+       });
++      entries.push({
++        url: siteUrl(`/flashcards/${c.slug}`),
++        lastModified: c.updatedAt,
++        changeFrequency: "weekly",
++        priority: 0.68,
++      });
+     }
+   } catch {
+     /* DB unavailable — still ship static URLs */
+diff --git a/src/components/challenges/problemset.tsx b/src/components/challenges/problemset.tsx
+index e11538b..9bd9b28 100644
+--- a/src/components/challenges/problemset.tsx
++++ b/src/components/challenges/problemset.tsx
+@@ -617,6 +617,12 @@ export function Problemset(props: {
+                           {p.title}
+                         </Link>
+                       </h2>
++                      <Link
++                        href={`/flashcards/${p.slug}`}
++                        className="mt-1 inline-block font-mono text-[10px] text-orange-700 hover:underline"
++                      >
++                        Flash cards
++                      </Link>
+                       <p className="mt-1 line-clamp-2 text-xs text-slate-500">{p.summary}</p>
+                     </div>
+                     <span className={cn("shrink-0 text-sm font-medium", diffClass(L))}>{L}</span>
+diff --git a/src/components/layout/app-shell.tsx b/src/components/layout/app-shell.tsx
+index 3d1c949..43881f4 100644
+--- a/src/components/layout/app-shell.tsx
++++ b/src/components/layout/app-shell.tsx
+@@ -66,6 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
+     title: "Prep",
+     roles: ["CANDIDATE", "TEAM_MEMBER"],
+     items: [
++      { href: "/flashcards", label: "Flash cards", icon: BookOpen, hint: "Drill each problem’s patterns" },
+       { href: "/study-plans", label: "Study plans", icon: ScrollText, hint: "Sequenced interview paths" },
+       { href: "/editorials", label: "Editorials", icon: BookOpen, hint: "Writeups after you solve" },
+       { href: "/playgrounds", label: "Playgrounds", icon: Boxes, hint: "Scratch pads" },
+@@ -125,8 +126,11 @@ function isGuestOpen(href: string) {
+     href === "/learn" ||
+     href.startsWith("/learn/") ||
+     href === "/challenges" ||
++    href.startsWith("/challenges/") ||
+     href === "/jobs" ||
+-    href.startsWith("/jobs/")
++    href.startsWith("/jobs/") ||
++    href === "/flashcards" ||
++    href.startsWith("/flashcards/")
+   );
+ }
+ 
+@@ -331,8 +335,8 @@ export function AppShell({
+       ? ([
+           { href: "/learn", label: "Learn", icon: BookOpen },
+           { href: "/challenges", label: "Practice", icon: Boxes },
++          { href: "/flashcards", label: "Cards", icon: BookOpen },
+           { href: "/jobs", label: "Jobs", icon: Briefcase },
+-          { href: "/register", label: "Join", icon: UserRound },
+         ] as const)
+       : ([
+           { href: "/learn", label: "Learn", icon: BookOpen },
+diff --git a/src/components/learn/flashcards-client.tsx b/src/components/learn/flashcards-client.tsx
+new file mode 100644
+index 0000000..cbf9059
+--- /dev/null
++++ b/src/components/learn/flashcards-client.tsx
+@@ -0,0 +1,251 @@
++"use client";
++
++import Link from "next/link";
++import { useCallback, useEffect, useMemo, useState } from "react";
++import { Badge } from "@/components/ui/badge";
++import { Button } from "@/components/ui/button";
++import { cn } from "@/lib/utils";
++import type { FlashCard } from "@/server/learning/flashcards";
++
++const KIND_LABEL: Record<FlashCard["kind"], string> = {
++  prompt: "Prompt",
++  pattern: "Pattern",
++  edge: "Edge",
++  company: "Company",
++  requirement: "Requirement",
++  followup: "Follow-up",
++};
++
++function storageKey(slug: string) {
++  return `crucible_flash_${slug}`;
++}
++
++export function FlashcardsClient(props: {
++  slug: string;
++  title: string;
++  summary?: string | null;
++  cards: FlashCard[];
++  challengeHref?: string;
++}) {
++  const [index, setIndex] = useState(0);
++  const [flipped, setFlipped] = useState(false);
++  const [known, setKnown] = useState<Set<string>>(() => new Set());
++
++  useEffect(() => {
++    try {
++      const raw = localStorage.getItem(storageKey(props.slug));
++      if (!raw) return;
++      const parsed = JSON.parse(raw) as { known?: string[] };
++      if (Array.isArray(parsed.known)) setKnown(new Set(parsed.known));
++    } catch {
++      /* ignore */
++    }
++  }, [props.slug]);
++
++  useEffect(() => {
++    try {
++      localStorage.setItem(storageKey(props.slug), JSON.stringify({ known: [...known] }));
++    } catch {
++      /* ignore */
++    }
++  }, [known, props.slug]);
++
++  const card = props.cards[index] ?? null;
++  const progress = props.cards.length
++    ? Math.round((known.size / props.cards.length) * 100)
++    : 0;
++
++  const remaining = useMemo(
++    () => props.cards.map((c, i) => ({ c, i })).filter(({ c }) => !known.has(c.id)),
++    [known, props.cards],
++  );
++
++  const go = useCallback(
++    (next: number) => {
++      if (!props.cards.length) return;
++      const n = ((next % props.cards.length) + props.cards.length) % props.cards.length;
++      setIndex(n);
++      setFlipped(false);
++    },
++    [props.cards.length],
++  );
++
++  function markKnown(yes: boolean) {
++    if (!card) return;
++    setKnown((prev) => {
++      const next = new Set(prev);
++      if (yes) next.add(card.id);
++      else next.delete(card.id);
++      return next;
++    });
++    if (yes) {
++      const nextRemaining = remaining.filter(({ c }) => c.id !== card.id);
++      if (nextRemaining[0]) {
++        setIndex(nextRemaining[0].i);
++        setFlipped(false);
++      } else {
++        go(index + 1);
++      }
++    } else {
++      go(index + 1);
++    }
++  }
++
++  if (!card) {
++    return (
++      <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-16 text-center text-sm text-slate-500">
++        No flash cards for this deck yet.
++      </div>
++    );
++  }
++
++  return (
++    <div className="animate-rise space-y-6">
++      <header className="space-y-2">
++        <p className="font-mono text-xs tracking-[0.28em] text-[var(--brand)]">FLASH CARDS</p>
++        <h1 className="font-serif-display text-2xl text-slate-900 sm:text-3xl">{props.title}</h1>
++        {props.summary ? <p className="max-w-2xl text-slate-600">{props.summary}</p> : null}
++        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
++          <span>
++            Card {index + 1}/{props.cards.length}
++          </span>
++          <span>·</span>
++          <span>{known.size} marked known · {progress}%</span>
++          {props.challengeHref ? (
++            <>
++              <span>·</span>
++              <Link href={props.challengeHref} className="text-orange-800 hover:underline">
++                Open problem
++              </Link>
++            </>
++          ) : null}
++        </div>
++        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
++          <div className="h-full rounded-full bg-[var(--brand)] transition-[width]" style={{ width: `${progress}%` }} />
++        </div>
++      </header>
++
++      <button
++        type="button"
++        onClick={() => setFlipped((f) => !f)}
++        className={cn(
++          "min-h-[240px] w-full rounded-2xl border p-6 text-left transition sm:min-h-[280px]",
++          flipped
++            ? "border-emerald-300/60 bg-emerald-50/80"
++            : "border-orange-300/50 bg-[var(--surface-elevated)] hover:border-orange-400/70",
++        )}
++      >
++        <div className="flex items-center justify-between gap-2">
++          <Badge variant={flipped ? "emerald" : "brand"}>{KIND_LABEL[card.kind]}</Badge>
++          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
++            {flipped ? "Answer" : "Tap to flip"}
++          </span>
++        </div>
++        <p className="mt-6 whitespace-pre-wrap text-lg leading-relaxed text-slate-900 sm:text-xl">
++          {flipped ? card.back : card.front}
++        </p>
++      </button>
++
++      <div className="flex flex-wrap gap-2">
++        <Button variant="secondary" onClick={() => go(index - 1)}>
++          Previous
++        </Button>
++        <Button variant="secondary" onClick={() => setFlipped((f) => !f)}>
++          {flipped ? "Show prompt" : "Show answer"}
++        </Button>
++        <Button variant="outline" onClick={() => markKnown(false)}>
++          Again
++        </Button>
++        <Button onClick={() => markKnown(true)}>Know it</Button>
++        <Button variant="secondary" onClick={() => go(index + 1)}>
++          Next
++        </Button>
++      </div>
++
++      {known.size >= props.cards.length && (
++        <div className="rounded-xl border border-emerald-300/50 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950">
++          Deck clear.{" "}
++          {props.challengeHref ? (
++            <Link href={props.challengeHref} className="font-medium underline">
++              Solve the problem next →
++            </Link>
++          ) : (
++            <Link href="/challenges" className="font-medium underline">
++              Back to practice →
++            </Link>
++          )}
++        </div>
++      )}
++    </div>
++  );
++}
++
++export function FlashcardsHubClient(props: {
++  decks: {
++    slug: string;
++    title: string;
++    summary: string;
++    difficulty: number;
++    tags: string[];
++    cardCount: number;
++  }[];
++}) {
++  const [q, setQ] = useState("");
++  const filtered = useMemo(() => {
++    const needle = q.trim().toLowerCase();
++    if (!needle) return props.decks;
++    return props.decks.filter((d) =>
++      `${d.title} ${d.summary} ${d.tags.join(" ")} ${d.slug}`.toLowerCase().includes(needle),
++    );
++  }, [props.decks, q]);
++
++  return (
++    <div className="animate-rise space-y-6">
++      <header className="space-y-2">
++        <p className="font-mono text-xs tracking-[0.28em] text-[var(--brand)]">FLASH CARDS</p>
++        <h1 className="font-serif-display text-2xl text-slate-900 sm:text-3xl">
++          Drill every problem before you code
++        </h1>
++        <p className="max-w-2xl text-slate-600">
++          Each published challenge gets a free deck — prompt, patterns, edges, and company cues. Progress saves in this
++          browser.
++        </p>
++      </header>
++
++      <input
++        value={q}
++        onChange={(e) => setQ(e.target.value)}
++        placeholder="Filter by title, tag, company pattern…"
++        className="flex h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
++      />
++
++      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
++        {filtered.map((d) => (
++          <li key={d.slug}>
++            <Link
++              href={`/flashcards/${d.slug}`}
++              className="block h-full rounded-2xl border border-slate-200 bg-white/80 p-4 transition hover:border-[var(--brand)]/40"
++            >
++              <div className="flex flex-wrap gap-2">
++                <Badge variant="brand">D{d.difficulty}</Badge>
++                <Badge>{d.cardCount} cards</Badge>
++              </div>
++              <h2 className="mt-3 font-medium text-slate-900">{d.title}</h2>
++              <p className="mt-1 line-clamp-2 text-sm text-slate-600">{d.summary}</p>
++              <div className="mt-3 flex flex-wrap gap-1.5">
++                {d.tags.slice(0, 4).map((t) => (
++                  <span key={t} className="rounded border border-slate-200 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
++                    {t}
++                  </span>
++                ))}
++              </div>
++            </Link>
++          </li>
++        ))}
++      </ul>
++      {!filtered.length && (
++        <p className="text-center text-sm text-slate-500">No decks match that filter.</p>
++      )}
++    </div>
++  );
++}
+diff --git a/src/components/workspace/ide.tsx b/src/components/workspace/ide.tsx
+index dbf5523..a5612e7 100644
+--- a/src/components/workspace/ide.tsx
++++ b/src/components/workspace/ide.tsx
+@@ -1395,6 +1395,14 @@ function AcceptedNextSteps(props: {
+         >
+           {props.premium ? "Open editorial" : "Editorial teaser"}
+         </Link>
++        {props.challengeSlug ? (
++          <Link
++            href={`/flashcards/${props.challengeSlug}`}
++            className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
++          >
++            Flash cards
++          </Link>
++        ) : null}
+         <Link
+           href="/challenges"
+           className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 hover:border-orange-300"
+diff --git a/src/lib/access.ts b/src/lib/access.ts
+index aab0f9b..1f9110b 100644
+--- a/src/lib/access.ts
++++ b/src/lib/access.ts
+@@ -87,7 +87,7 @@ export function homeForRole(role: string): string {
+ }
+ 
+ /** Paths guests can use without signing in (nav + page guards). */
+-export const GUEST_FREE_PREFIXES = ["/learn", "/challenges", "/jobs"] as const;
++export const GUEST_FREE_PREFIXES = ["/learn", "/challenges", "/jobs", "/flashcards"] as const;
+ 
+ export function isGuestFreePath(pathname: string): boolean {
+   return GUEST_FREE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+diff --git a/src/server/learning/flashcards.ts b/src/server/learning/flashcards.ts
+new file mode 100644
+index 0000000..066d3ba
+--- /dev/null
++++ b/src/server/learning/flashcards.ts
+@@ -0,0 +1,236 @@
++export type FlashCard = {
++  id: string;
++  front: string;
++  back: string;
++  kind: "prompt" | "pattern" | "edge" | "company" | "requirement" | "followup";
++};
++
++export type FlashDeckMeta = {
++  slug: string;
++  title: string;
++  summary: string;
++  difficulty: number;
++  tags: string[];
++  companies: string[];
++  cardCount: number;
++};
++
++/** Short pattern cues keyed by challenge tags — keeps decks useful, not just restated titles. */
++const PATTERN_CUES: Record<string, { front: string; back: string }> = {
++  "hash-table": {
++    front: "When is a hash map the right first move?",
++    back: "Need O(1) lookups / complements / frequency counts while scanning once (Two Sum, anagrams, prefix maps).",
++  },
++  array: {
++    front: "Array interview default toolkit?",
++    back: "Two pointers, sliding window, prefix sums, sorting + scan, and hash maps for complements.",
++  },
++  stack: {
++    front: "When do you reach for a stack?",
++    back: "Nested structure, matching pairs, monotonic next-greater/smaller, or undo/path reconstruction.",
++  },
++  "sliding-window": {
++    front: "Sliding window vs two pointers?",
++    back: "Window grows/shrinks over a contiguous segment to maintain a property (coverage, uniqueness, sum).",
++  },
++  dp: {
++    front: "DP interview signal?",
++    back: "Optimal substructure + overlapping subproblems — define state, transition, base cases, then optimize space.",
++  },
++  graph: {
++    front: "Graph traversal pick?",
++    back: "BFS for shortest unweighted paths / levels; DFS/recursion for connectivity, cycles, topo order.",
++  },
++  "topo-sort": {
++    front: "Topological sort use case?",
++    back: "Ordering tasks with prerequisites (course schedule) — Kahn BFS or DFS finish times; detect cycles.",
++  },
++  tree: {
++    front: "Binary tree recursion template?",
++    back: "Define return value per node, recurse left/right, combine — watch null bases and balanced vs BST rules.",
++  },
++  heap: {
++    front: "When is a heap (priority queue) ideal?",
++    back: "Repeated min/max extraction — top-K, merge K lists, scheduling by soonest deadline.",
++  },
++  "linked-list": {
++    front: "Linked list interview patterns?",
++    back: "Dummy head, two pointers (fast/slow), reverse in place, and careful null/tail updates.",
++  },
++  string: {
++    front: "String problem first questions?",
++    back: "Charset size? Contiguous vs subsequence? Need counts, stack matching, or sliding window coverage?",
++  },
++  design: {
++    front: "Design-a-structure interview focus?",
++    back: "State the ops + complexity targets, pick backing structures, then handle edge cases and amortization.",
++  },
++  dfs: {
++    front: "DFS vs BFS quick rule?",
++    back: "DFS explores deep paths / backtracking; BFS explores layers and finds shortest unweighted routes.",
++  },
++  bfs: {
++    front: "BFS classic uses?",
++    back: "Level-order trees, shortest path in unweighted graphs, multi-source flood fill.",
++  },
++  sorting: {
++    front: "Why sort first in interviews?",
++    back: "Turns overlaps/pairs/ranges into a linear scan — merge intervals, two-sum variants, greedy choice.",
++  },
++  trie: {
++    front: "When does a trie win?",
++    back: "Prefix queries, dictionary word breaks, and autocomplete over many strings.",
++  },
++  queue: {
++    front: "Queue interview cue?",
++    back: "FIFO ordering, sliding-window maxima with deque, or BFS frontiers.",
++  },
++  easy: {
++    front: "Easy-round expectation?",
++    back: "Correct brute force fast, then improve — communicate complexity and edge cases clearly.",
++  },
++  medium: {
++    front: "Medium-round expectation?",
++    back: "Pick the right pattern quickly, code cleanly, and prove edges with tests.",
++  },
++  hard: {
++    front: "Hard-round survival tip?",
++    back: "Clarify constraints, propose a workable plan, implement the core path, then harden edges if time.",
++  },
++  coding: {
++    front: "What does a coding evidence session grade?",
++    back: "Public examples + hidden harness — correctness under edges and time/memory limits.",
++  },
++};
++
++function asHints(raw: unknown): string[] {
++  if (!raw) return [];
++  if (Array.isArray(raw)) return raw.map(String).filter(Boolean).slice(0, 6);
++  if (typeof raw === "string") {
++    try {
++      const parsed = JSON.parse(raw);
++      return asHints(parsed);
++    } catch {
++      return raw.trim() ? [raw.trim()] : [];
++    }
++  }
++  return [];
++}
++
++export function buildChallengeFlashCards(input: {
++  slug: string;
++  title: string;
++  summary: string | null;
++  description?: string | null;
++  tags: string[];
++  companies: string[];
++  publicRequirements?: unknown;
++  hiddenRequirements?: unknown;
++  hints?: unknown;
++  adaptiveTrack?: unknown;
++}): FlashCard[] {
++  const cards: FlashCard[] = [];
++  const push = (card: Omit<FlashCard, "id">) => {
++    cards.push({ ...card, id: `${input.slug}-${card.kind}-${cards.length}` });
++  };
++
++  push({
++    kind: "prompt",
++    front: `What is “${input.title}” asking for?`,
++    back: input.summary?.trim() || "Solve the stated coding/mission prompt with correct edge handling.",
++  });
++
++  const followUp = input.description?.match(/##\s*Follow-up\s*\n+([\s\S]*?)(?:\n##|$)/i)?.[1]?.trim();
++  if (followUp) {
++    push({
++      kind: "followup",
++      front: `Follow-up for ${input.title}?`,
++      back: followUp.replace(/\s+/g, " ").slice(0, 320),
++    });
++  }
++
++  for (const tag of input.tags) {
++    const cue = PATTERN_CUES[tag.toLowerCase()];
++    if (!cue) continue;
++    push({ kind: "pattern", front: cue.front, back: `${cue.back}\n\nSeen in: ${input.title}` });
++  }
++
++  const publics = asHints(input.publicRequirements);
++  for (const req of publics.slice(0, 3)) {
++    push({
++      kind: "requirement",
++      front: `Public requirement on ${input.title}?`,
++      back: req,
++    });
++  }
++
++  const hiddens = asHints(input.hiddenRequirements);
++  for (const req of hiddens.slice(0, 3)) {
++    push({
++      kind: "edge",
++      front: `Hidden edge to watch on ${input.title}?`,
++      back: req,
++    });
++  }
++
++  for (const hint of asHints(input.hints).slice(0, 4)) {
++    push({
++      kind: "edge",
++      front: `Hint for ${input.title}`,
++      back: hint,
++    });
++  }
++
++  if (Array.isArray(input.adaptiveTrack)) {
++    for (const step of input.adaptiveTrack.slice(0, 3) as { title?: string; criteria?: string }[]) {
++      if (!step?.title) continue;
++      push({
++        kind: "requirement",
++        front: `Level goal: ${step.title}`,
++        back: step.criteria || `Progress on ${input.title}`,
++      });
++    }
++  }
++
++  if (input.companies.length) {
++    push({
++      kind: "company",
++      front: `Where does “${input.title}” show up?`,
++      back: `Commonly tagged at ${input.companies.slice(0, 6).join(", ")}. Use it as company-loop warm-up before a timed mock.`,
++    });
++  }
++
++  // Deduplicate near-identical fronts
++  const seen = new Set<string>();
++  return cards.filter((c) => {
++    const key = c.front.toLowerCase();
++    if (seen.has(key)) return false;
++    seen.add(key);
++    return true;
++  });
++}
++
++export function buildLessonFlashCards(input: {
++  slug: string;
++  title: string;
++  summary: string;
++  skills: string[];
++}): FlashCard[] {
++  const cards: FlashCard[] = [
++    {
++      id: `${input.slug}-prompt-0`,
++      kind: "prompt",
++      front: `What is “${input.title}” about?`,
++      back: input.summary,
++    },
++  ];
++  for (const [i, skill] of input.skills.entries()) {
++    cards.push({
++      id: `${input.slug}-pattern-${i}`,
++      kind: "pattern",
++      front: `Skill from ${input.title}?`,
++      back: skill.replaceAll("-", " "),
++    });
++  }
++  return cards;
++}
+-- 
+2.43.0
+
