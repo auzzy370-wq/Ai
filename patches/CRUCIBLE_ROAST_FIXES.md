@@ -87,3 +87,6 @@ Apply `crucible-study-course-feel.patch`: syllabus units/weeks for Interview + A
 
 ## Flash card filters (2026-11-10)
 Apply `crucible-flashcard-filters.patch`: hub filters for difficulty/domain/pattern/company + sort; in-deck kind filter and hide-known.
+
+## Career paths (2026-11-10)
+Apply `crucible-career-paths.patch`: choose a job target; enroll courses/practicums in order; `/career` syllabus that teaches what that role needs.
