@@ -63,3 +63,6 @@ Apply `crucible-jobs-remote.patch`: remote detect/badge, Remote focus chip, remo
 ## Security hardening (2026-11-10)
 Apply `crucible-security-hardening.patch`: CSRF middleware, env guards, Jobs rate limits, password session revoke, lesson XSS fix, `/security` page + Settings security checklist.
 
+## SEO boost (2026-11-10)
+Apply `crucible-seo-boost.patch`: metadataBase/OG/Twitter, robots+sitemap, JSON-LD, public challenge SEO pages, keyword titles.
+
